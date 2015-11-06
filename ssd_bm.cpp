@@ -184,7 +184,7 @@ void Block_manager::insert_events(Event &event)
 	// First step and least expensive is to go though invalid list. (Only used by FAST)
 	while (num_to_erase != 0 && invalid_list.size() != 0)
 	{
-		Event erase_event = Event(ERASE, event.get_logical_address(), 1, event.get_start_time());
+		Event erase_event = Event(ERASE, event.get_logical_address(), 1, event.get_time_taken());
 		erase_event.set_address(Address(invalid_list.back()->get_physical_address(), BLOCK));
 		if (ftl->controller.issue(erase_event) == FAILURE) {	assert(false);}
 		event.incr_time_taken(erase_event.get_time_taken());
