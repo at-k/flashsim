@@ -631,16 +631,18 @@ enum status FtlImpl_Fast::write_to_log_block(Event &event, long logicalBlockAddr
 
 void FtlImpl_Fast::update_map_block(Event &event)
 {
-	Event writeEvent = Event(WRITE, event.get_logical_address(), 1, event.get_time_taken());
-	writeEvent.set_address(Address(0, PAGE));
-	writeEvent.set_noop(true);
+	//This is to persist the mappings but as of now, it does not do anything
+	return;
+	//Event writeEvent = Event(WRITE, event.get_logical_address(), 1, event.get_time_taken());
+	//writeEvent.set_address(Address(0, PAGE));
+	//writeEvent.set_noop(true);
 
-	controller.issue(writeEvent);
+	//controller.issue(writeEvent);
 
-	event.incr_time_taken(writeEvent.get_time_taken());
+	//event.incr_time_taken(writeEvent.get_time_taken());
 
-	controller.stats.numGCWrite++;
-	controller.stats.numFTLWrite++;
+	//controller.stats.numGCWrite++;
+	//controller.stats.numFTLWrite++;
 }
 
 
