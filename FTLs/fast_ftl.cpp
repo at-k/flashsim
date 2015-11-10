@@ -78,7 +78,6 @@ void FtlImpl_Fast::initialize_log_pages()
 	{
 		LogPageBlock *newLPB = new LogPageBlock();
 		newLPB->address = Block_manager::instance()->get_free_block(LOG, event);
-		printf("The new log block address is %d %d %d %d %d\n", newLPB->address.package, newLPB->address.die, newLPB->address.plane, newLPB->address.block, newLPB->address.page);
 		next->next = newLPB;
 		next = newLPB;
 	}
@@ -86,7 +85,6 @@ void FtlImpl_Fast::initialize_log_pages()
 enum status FtlImpl_Fast::read(Event &event)
 {
 	initialize_log_pages();
-
 	// Find block
 	long lookupBlock = (event.get_logical_address() >> addressShift);
 	uint lbnOffset = event.get_logical_address() % BLOCK_SIZE;
@@ -96,12 +94,18 @@ enum status FtlImpl_Fast::read(Event &event)
 	LogPageBlock *currentBlock = log_pages;
 
 	bool found = false;
-	while (!found && currentBlock != NULL)
+	
+	for (int log_block_num = FAST_LOG_PAGE_LIMIT - 1; log_block_num >= 0; log_block_num--)
 	{
-		for (int i=0;i<currentBlock->numPages;i++)
+		LogPageBlock *lpb = log_pages;
+		for(int i=0;i<log_block_num;i++)
+		{
+			lpb = lpb->next;
+		}
+		currentBlock = lpb;
+		for (int i=currentBlock->numPages-1;i>=0;i--)
 		{
 			//event.incr_time_taken(RAM_READ_DELAY);
-
 			if (currentBlock->aPages[i] == (long)event.get_logical_address())
 			{
 				Address readAddress = Address(currentBlock->address.get_linear_address() + i, PAGE);
@@ -112,8 +116,8 @@ enum status FtlImpl_Fast::read(Event &event)
 				break;
 			}
 		}
-
-		currentBlock = currentBlock->next;
+		if(found)
+			break;
 	}
 
 	if (!found)
@@ -135,7 +139,6 @@ enum status FtlImpl_Fast::read(Event &event)
 
 	// Statistics
 	controller.stats.numFTLRead++;
-
 	return controller.issue(event);
 }
 
@@ -143,7 +146,6 @@ enum status FtlImpl_Fast::write(Event &event)
 {
 	initialize_log_pages();
 
-	//printf("Logical write address is %d\n", event.get_logical_address());
 
 	long logicalBlockAddress = event.get_logical_address() >> addressShift;
 	Address eventAddress = Address(event.get_logical_address(), PAGE);
@@ -188,8 +190,6 @@ enum status FtlImpl_Fast::write(Event &event)
 
 	//printf("Writing %li for %lu\n", event.get_address().get_linear_address(), event.get_logical_address());
 	
-	Address event_address = event.get_address();
-	//printf("Physical write address is %d %d %d %d %d\n", event_address.package, event_address.die, event_address.plane, event_address.block, event_address.page);
 
 	if(issueEventRequired)
 		return controller.issue(event);
