@@ -833,10 +833,10 @@ private:
 	long *data_list;
 	bool *pin_list;
 
-	bool write_to_log_block(Event &event, long logicalBlockAddress);
+	enum status write_to_log_block(Event &event, long logicalBlockAddress, bool *issueEventRequired);
 
 	void switch_sequential(Event &event);
-	void merge_sequential(Event &event);
+	enum status merge_sequential(Event &event, bool issueWrite);
 	bool random_merge(LogPageBlock *logBlock, Event &event);
 
 	void update_map_block(Event &event);
