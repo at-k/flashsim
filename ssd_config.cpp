@@ -153,6 +153,8 @@ uint FAST_LOG_PAGE_LIMIT = 4;
  */
 uint CACHE_DFTL_LIMIT = 8;
 
+uint OVERPROVISIONING = 10;
+
 /*
  * Parallelism mode.
  * 0 -> Normal
@@ -232,6 +234,8 @@ void load_entry(char *name, double value, uint line_number) {
 		VIRTUAL_PAGE_SIZE = value;
 	else if (!strcmp(name, "RAID_NUMBER_OF_PHYSICAL_SSDS"))
 		RAID_NUMBER_OF_PHYSICAL_SSDS = value;
+	else if (!strcmp(name, "OVERPROVISIONING"))
+		OVERPROVISIONING = value;
 	else
 		fprintf(stderr, "Config file parsing error on line %u\n", line_number);
 	return;
@@ -271,7 +275,11 @@ void load_config(void) {
 	}
 	fclose(config_file);
 
-	NUMBER_OF_ADDRESSABLE_BLOCKS = (SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * PLANE_SIZE) / VIRTUAL_PAGE_SIZE;
+	NUMBER_OF_ADDRESSABLE_BLOCKS = ((1 - float(OVERPROVISIONING)/100) * (SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * PLANE_SIZE)) / VIRTUAL_PAGE_SIZE;
+
+	FAST_LOG_PAGE_LIMIT	= (float(OVERPROVISIONING)/100 * (SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * PLANE_SIZE)) / VIRTUAL_PAGE_SIZE;
+
+	BAST_LOG_PAGE_LIMIT	= (float(OVERPROVISIONING)/100 * (SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * PLANE_SIZE)) / VIRTUAL_PAGE_SIZE;
 
 	return;
 }

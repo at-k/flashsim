@@ -29,6 +29,8 @@ Block_manager::Block_manager(FtlParent *ftl) : ftl(ftl)
 	max_blocks = NUMBER_OF_ADDRESSABLE_BLOCKS;
 	max_log_blocks = max_blocks;
 
+	printf("[PRINT] Number of addressable blocks %d %d\n", NUMBER_OF_ADDRESSABLE_BLOCKS, SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * PLANE_SIZE);
+
 	if (FTL_IMPLEMENTATION == IMPL_FAST)
 		max_log_blocks = FAST_LOG_PAGE_LIMIT;
 
@@ -77,7 +79,8 @@ void Block_manager::get_page_block(Address &address, Event &event)
 {
 	// We need separate queues for each plane? communication channel? communication channel is at the per die level at the moment. i.e. each LUN is a die.
 
-	if (simpleCurrentFree < max_blocks*BLOCK_SIZE)
+	//printf("sipmple current free is set at %lu\n", simpleCurrentFree);
+	if (simpleCurrentFree < SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * PLANE_SIZE * BLOCK_SIZE)
 	{
 		address.set_linear_address(simpleCurrentFree, BLOCK);
 		current_writing_block = simpleCurrentFree;

@@ -78,6 +78,7 @@ void FtlImpl_Fast::initialize_log_pages()
 	{
 		LogPageBlock *newLPB = new LogPageBlock();
 		newLPB->address = Block_manager::instance()->get_free_block(LOG, event);
+		printf("The new log block address is %d %d %d %d %d\n", newLPB->address.package, newLPB->address.die, newLPB->address.plane, newLPB->address.block, newLPB->address.page);
 		next->next = newLPB;
 		next = newLPB;
 	}
@@ -142,6 +143,8 @@ enum status FtlImpl_Fast::write(Event &event)
 {
 	initialize_log_pages();
 
+	//printf("Logical write address is %d\n", event.get_logical_address());
+
 	long logicalBlockAddress = event.get_logical_address() >> addressShift;
 	Address eventAddress = Address(event.get_logical_address(), PAGE);
 
@@ -185,6 +188,9 @@ enum status FtlImpl_Fast::write(Event &event)
 
 	//printf("Writing %li for %lu\n", event.get_address().get_linear_address(), event.get_logical_address());
 	
+	Address event_address = event.get_address();
+	//printf("Physical write address is %d %d %d %d %d\n", event_address.package, event_address.die, event_address.plane, event_address.block, event_address.page);
+
 	if(issueEventRequired)
 		return controller.issue(event);
 	else
@@ -429,14 +435,14 @@ bool FtlImpl_Fast::random_merge(LogPageBlock *logBlock, Event &event)
 					else if (get_state(writeAddress) == EMPTY)
 					{
 						// Read the active log address
-						Event readEvent = Event(READ, event.get_logical_address(), 1, event.get_start_time());
+						Event readEvent = Event(READ, event.get_logical_address(), 1, event.get_time_taken());
 						Address readAddress = Address(lpb->address.get_linear_address()+i, PAGE);
 						readEvent.set_address(readAddress);
 
 						if (controller.issue(readEvent) == FAILURE) { printf("failed\n"); return false; }
 						//event.consolidate_metaevent(readEvent);
 
-						Event writeEvent = Event(WRITE, event.get_logical_address(), 1, event.get_start_time()+readEvent.get_time_taken());
+						Event writeEvent = Event(WRITE, event.get_logical_address(), 1, event.get_time_taken()+readEvent.get_time_taken());
 						writeEvent.set_payload((char*)page_data + readAddress.get_linear_address() * PAGE_SIZE);
 						writeEvent.set_address(writeAddress);
 
@@ -467,13 +473,13 @@ bool FtlImpl_Fast::random_merge(LogPageBlock *logBlock, Event &event)
 				Address readAddress = Address(data_list[victimLBA] + i, PAGE);
 				if (get_state(readAddress) == VALID)
 				{
-					Event readEvent = Event(READ, event.get_logical_address(), 1, event.get_start_time());
+					Event readEvent = Event(READ, event.get_logical_address(), 1, event.get_time_taken());
 					readEvent.set_address(readAddress);
 					if (controller.issue(readEvent) == FAILURE) { printf("failed\n"); return false;	}
 					//event.consolidate_metaevent(readEvent);
 
 					// Write the page to merge address
-					Event writeEvent = Event(WRITE, event.get_logical_address(), 1, event.get_start_time()+readEvent.get_time_taken());
+					Event writeEvent = Event(WRITE, event.get_logical_address(), 1, event.get_time_taken()+readEvent.get_time_taken());
 					writeEvent.set_payload((char*)page_data + readAddress.get_linear_address() * PAGE_SIZE);
 					writeEvent.set_address(writeAddress);
 					if (controller.issue(writeEvent) == FAILURE) { printf("failed\n"); return false;	}
@@ -625,7 +631,7 @@ enum status FtlImpl_Fast::write_to_log_block(Event &event, long logicalBlockAddr
 
 void FtlImpl_Fast::update_map_block(Event &event)
 {
-	Event writeEvent = Event(WRITE, event.get_logical_address(), 1, event.get_start_time());
+	Event writeEvent = Event(WRITE, event.get_logical_address(), 1, event.get_time_taken());
 	writeEvent.set_address(Address(0, PAGE));
 	writeEvent.set_noop(true);
 
