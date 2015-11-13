@@ -112,7 +112,7 @@ enum status Block::write(Event &event)
 	{
 		pages_valid++;
 		state = ACTIVE;
-		modification_time = event.get_start_time();
+		modification_time = event.get_total_time();
 
 		Block_manager::instance()->update_block(this);
 	}

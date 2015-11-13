@@ -78,6 +78,8 @@ uint BUS_TABLE_SIZE = 64;
 double BUS_CHANNEL_FREE_FLAG = -1.0;
 /* uint BUS_CHANNELS = 4; same as # of Packages, defined by SSD_SIZE */
 
+double PLANE_INACTIVE_FLAG = -1.0;
+
 /* Ssd class:
  * 	number of Packages per Ssd (size) */
 uint SSD_SIZE = 4;

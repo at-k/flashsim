@@ -94,6 +94,9 @@ Plane::Plane(const Die &parent, uint plane_size, double reg_read_delay, double r
 		(void) new (&data[i]) Block(*this, BLOCK_SIZE, BLOCK_ERASES, BLOCK_ERASE_DELAY,physical_address+(i*BLOCK_SIZE));
 	}
 
+	plane_operation = P_NONE;
+	plane_operation_start_time = PLANE_INACTIVE_FLAG;
+	plane_operation_end_time = PLANE_INACTIVE_FLAG;
 
 	return;
 }
@@ -113,12 +116,43 @@ Plane::~Plane(void)
 enum status Plane::read(Event &event)
 {
 	assert(event.get_address().block < size && event.get_address().valid > PLANE);
+
+	if(plane_operation_start_time != PLANE_INACTIVE_FLAG && plane_operation_end_time != PLANE_INACTIVE_FLAG)
+	{
+		double cur_event_time = event.get_total_time();
+		if(cur_event_time + PAGE_READ_DELAY <= plane_operation_start_time || 
+			plane_operation_end_time <= cur_event_time )
+		{}
+		else
+		{
+			//printf("read had at %d to wait %f\n", plane_operation, plane_operation_end_time - cur_event_time);
+			event.incr_time_taken(plane_operation_end_time - cur_event_time);
+		}
+	}
+	plane_operation = P_READ;
+	plane_operation_start_time = event.get_total_time();
+	plane_operation_end_time = event.get_total_time() + PAGE_READ_DELAY;
 	return data[event.get_address().block].read(event);
 }
 
 enum status Plane::write(Event &event)
 {
 	assert(event.get_address().block < size && event.get_address().valid > PLANE && next_page.valid >= BLOCK);
+
+	if(plane_operation_start_time != PLANE_INACTIVE_FLAG && plane_operation_end_time != PLANE_INACTIVE_FLAG)
+	{
+		double cur_event_time = event.get_total_time();
+		if(cur_event_time + PAGE_WRITE_DELAY <= plane_operation_start_time || 
+			plane_operation_end_time <= cur_event_time )
+		{}
+		else
+		{
+			event.incr_time_taken(plane_operation_end_time - cur_event_time);
+		}
+	}
+	plane_operation = P_WRITE;
+	plane_operation_start_time = event.get_total_time();
+	plane_operation_end_time = event.get_total_time() + PAGE_WRITE_DELAY;
 
 	enum block_state prev = data[event.get_address().block].get_state();
 
@@ -149,6 +183,22 @@ enum status Plane::replace(Event &event)
 enum status Plane::erase(Event &event)
 {
 	assert(event.get_address().block < size && event.get_address().valid > PLANE);
+	if(plane_operation_start_time != PLANE_INACTIVE_FLAG && plane_operation_end_time != PLANE_INACTIVE_FLAG)
+	{
+		double cur_event_time = event.get_total_time();
+		if(cur_event_time + BLOCK_ERASE_DELAY <= plane_operation_start_time || 
+			plane_operation_end_time <= cur_event_time )
+		{}
+		else
+		{
+			event.incr_time_taken(plane_operation_end_time - cur_event_time);
+		}
+	}
+	//printf("starting an erase\n");
+	plane_operation = P_ERASE;
+	plane_operation_start_time = event.get_total_time();
+	plane_operation_end_time = event.get_total_time() + BLOCK_ERASE_DELAY;
+
 	enum status status = data[event.get_address().block]._erase(event);
 
 	/* update values if no errors */

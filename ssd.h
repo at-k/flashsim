@@ -79,7 +79,10 @@ extern const uint BUS_MAX_CONNECT;
 extern const double BUS_CHANNEL_FREE_FLAG;
 extern const uint BUS_TABLE_SIZE;
 /* extern const uint BUS_CHANNELS = 4; same as # of Packages, defined by SSD_SIZE */
-
+/*Plane class
+ *Signifies that the plane is not undergoing any operation
+ * */
+extern const double PLANE_INACTIVE_FLAG;
 /* Ssd class:
  * 	number of Packages per Ssd (size) */
 extern const uint SSD_SIZE;
@@ -200,6 +203,9 @@ enum status{FAILURE, SUCCESS};
  * 	the package, die, plane, and block fields are valid
  * 	the page field is not valid */
 enum address_valid{NONE, PACKAGE, DIE, PLANE, BLOCK, PAGE};
+
+
+enum operation{P_NONE, P_READ, P_WRITE, P_ERASE};
 
 /*
  * Block type status
@@ -576,6 +582,9 @@ private:
 	double reg_write_delay;
 	Address next_page;
 	uint free_blocks;
+	enum operation plane_operation;
+	double plane_operation_start_time;
+	double plane_operation_end_time;
 };
 
 /* The die is the data storage hardware unit that contains planes and is a flash
