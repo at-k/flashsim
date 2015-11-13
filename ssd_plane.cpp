@@ -211,8 +211,8 @@ enum status Plane::_merge(Event &event)
 	read.valid = PAGE;
 	write.page = 0;
 	write.valid = PAGE;
-	Event read_event(READ, 0, 1, event.get_start_time());
-	Event write_event(WRITE, 0, 1, event.get_start_time());
+	Event read_event(READ, 0, 1, event.get_total_time());
+	Event write_event(WRITE, 0, 1, event.get_total_time());
 	read_event.set_address(read);
 	write_event.set_address(write);
 	

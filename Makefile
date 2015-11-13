@@ -1,5 +1,6 @@
 CXX=g++
 CXXFLAGS=-Wall -c
+DEBUGFLAGS=-g
 LDFLAGS=
 HEADERS=ssd.h
 SOURCES_SSDLIB = $(filter-out ssd_ftl.cpp, $(wildcard ssd_*.cpp))  \
@@ -13,11 +14,11 @@ PROGRAMS = $(patsubst run_%.cpp,%,$(SOURCES_RUNS))
 all: $(PROGRAMS)
 
 .cpp.o: $(HEADERS)
-	$(CXX) $(CXXFLAGS) $< -o $@
+	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) $< -o $@
 
 define PROGRAM_TEMPLATE
   $1 : run_$1.o $$(OBJECTS_SSDLIB)
-	$$(CXX) $$(LDFLAGS) $$< $$(OBJECTS_SSDLIB) -o $$@
+	$$(CXX) $$(LDFLAGS) $$< $$(OBJECTS_SSDLIB) $$(DEBUGFLAGS) -o $$@
 endef
 
 $(foreach prog,$(PROGRAMS),$(eval $(call PROGRAM_TEMPLATE,$(prog))))

@@ -207,7 +207,7 @@ enum address_valid{NONE, PACKAGE, DIE, PLANE, BLOCK, PAGE};
  * it should work with.
  * the block types are log, data and map (Directory map usually)
  */
-enum block_type {LOG, DATA, LOG_SEQ};
+enum block_type {LOG, DATA};
 
 /*
  * Enumeration of the different FTL implementations.
@@ -377,6 +377,7 @@ public:
 	enum event_type get_event_type(void) const;
 	double get_start_time(void) const;
 	double get_time_taken(void) const;
+	double get_total_time(void) const;
 	double get_bus_wait_time(void) const;
 	bool get_noop(void) const;
 	Event *get_next(void) const;
@@ -678,7 +679,7 @@ public:
 	void invalidate(Address address, block_type btype);
 	void print_statistics();
 	void insert_events(Event &event);
-	void promote_block(block_type to_type);
+	void change_block_type(Address block_address, block_type new_type);
 	bool is_log_full();
 	void erase_and_invalidate(Event &event, Address &address, block_type btype);
 	int get_num_free_blocks();
@@ -694,7 +695,7 @@ public:
 	void cost_insert(Block *b);
 
 	void print_cost_status();
-
+	void init_free_list(Event &event);
 
 
 private:
@@ -855,6 +856,42 @@ private:
 };
 
 
+class FtlImpl_Fast_Improved : public FtlParent
+{
+public:
+	FtlImpl_Fast_Improved(Controller &controller);
+	~FtlImpl_Fast_Improved();
+	enum status read(Event &event);
+	enum status write(Event &event);
+	enum status trim(Event &event);
+private:
+	void initialize_log_pages();
+
+	std::map<long, LogPageBlock*> log_map;
+
+	long *data_list;
+	bool *pin_list;
+
+	enum status write_to_log_block(Event &event, long logicalBlockAddress, bool *issueEventRequired);
+
+	void switch_sequential(Event &event);
+	enum status merge_sequential(Event &event, bool issueWrite);
+	bool random_merge(LogPageBlock *logBlock, Event &event);
+
+	void update_map_block(Event &event);
+
+	void print_ftl_statistics();
+
+	long sequential_logicalblock_address;
+	Address sequential_address;
+	uint sequential_offset;
+
+	uint log_page_next;
+	LogPageBlock *log_pages;
+
+	int addressShift;
+	int addressSize;
+};
 
 class FtlImpl_DftlParent : public FtlParent
 {
@@ -999,6 +1036,7 @@ public:
 	friend class FtlImpl_Dftl;
 	friend class FtlImpl_BDftl;
 	friend class Block_manager;
+	friend class FtlImpl_Fast_Improved;
 
 	Stats stats;
 	void print_ftl_statistics();

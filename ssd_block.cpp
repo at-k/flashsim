@@ -133,7 +133,6 @@ enum status Block::_erase(Event &event)
 {
 	assert(data != NULL && erase_delay >= 0.0);
 	uint i;
-
 	if (!event.get_noop())
 	{
 		if(erases_remaining < 1)

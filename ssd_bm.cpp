@@ -50,9 +50,15 @@ Block_manager::Block_manager(FtlParent *ftl) : ftl(ftl)
 	active_cost.reserve(NUMBER_OF_ADDRESSABLE_BLOCKS);
 }
 
+
 Block_manager::~Block_manager(void)
 {
 	return;
+}
+
+void Block_manager::init_free_list(Event &event)
+{
+	free_list.push_back(ftl->get_block_pointer(get_free_block(LOG, event)));
 }
 
 void Block_manager::cost_insert(Block *b)
@@ -102,6 +108,29 @@ void Block_manager::get_page_block(Address &address, Event &event)
 	}
 }
 
+Address Block_manager::get_free_block(block_type type, Event &event)
+{
+	Address address;
+	get_page_block(address, event);
+	switch (type)
+	{
+	case DATA:
+		ftl->controller.get_block_pointer(address)->set_block_type(DATA);
+		data_active++;
+		break;
+	case LOG:
+		if (log_active >= max_log_blocks)
+			throw std::bad_alloc();
+
+		ftl->controller.get_block_pointer(address)->set_block_type(LOG);
+		log_active++;
+		break;
+	default:
+		break;
+	}
+
+	return address;
+}
 
 Address Block_manager::get_free_block(Event &event)
 {
@@ -112,14 +141,17 @@ Address Block_manager::get_free_block(Event &event)
  * Handles block manager statistics when changing a
  * block to a data block from a log block or vice versa.
  */
-void Block_manager::promote_block(block_type to_type)
+void Block_manager::change_block_type(Address block_address, block_type new_type)
 {
-	if (to_type == DATA)
+	if(ftl->controller.get_block_pointer(block_address)->get_block_type() == new_type)
+		return;
+	ftl->controller.get_block_pointer(block_address)->set_block_type(new_type);
+	if (new_type == DATA)
 	{
 		data_active++;
 		log_active--;
 	}
-	else if (to_type == LOG)
+	else if (new_type == LOG)
 	{
 		log_active++;
 		data_active--;
@@ -151,6 +183,7 @@ void Block_manager::print_statistics()
 
 void Block_manager::invalidate(Address address, block_type type)
 {
+	assert(ftl->get_block_pointer(address)->get_block_type() == type);
 	invalid_list.push_back(ftl->get_block_pointer(address));
 
 	switch (type)
@@ -160,8 +193,6 @@ void Block_manager::invalidate(Address address, block_type type)
 		break;
 	case LOG:
 		log_active--;
-		break;
-	case LOG_SEQ:
 		break;
 	}
 }
@@ -187,7 +218,7 @@ void Block_manager::insert_events(Event &event)
 	// First step and least expensive is to go though invalid list. (Only used by FAST)
 	while (num_to_erase != 0 && invalid_list.size() != 0)
 	{
-		Event erase_event = Event(ERASE, event.get_logical_address(), 1, event.get_time_taken());
+		Event erase_event = Event(ERASE, event.get_logical_address(), 1, event.get_total_time());
 		erase_event.set_address(Address(invalid_list.back()->get_physical_address(), BLOCK));
 		if (ftl->controller.issue(erase_event) == FAILURE) {	assert(false);}
 		event.incr_time_taken(erase_event.get_time_taken());
@@ -219,7 +250,7 @@ void Block_manager::insert_events(Event &event)
 				ftl->cleanup_block(event, blockErase);
 
 				// Create erase event and attach to current event queue.
-				Event erase_event = Event(ERASE, event.get_logical_address(), 1, event.get_start_time());
+				Event erase_event = Event(ERASE, event.get_logical_address(), 1, event.get_total_time());
 				erase_event.set_address(Address(blockErase->get_physical_address(), BLOCK));
 
 				// Execute erase
@@ -243,29 +274,6 @@ void Block_manager::insert_events(Event &event)
 	}
 }
 
-Address Block_manager::get_free_block(block_type type, Event &event)
-{
-	Address address;
-	get_page_block(address, event);
-	switch (type)
-	{
-	case DATA:
-		ftl->controller.get_block_pointer(address)->set_block_type(DATA);
-		data_active++;
-		break;
-	case LOG:
-		if (log_active > max_log_blocks)
-			throw std::bad_alloc();
-
-		ftl->controller.get_block_pointer(address)->set_block_type(LOG);
-		log_active++;
-		break;
-	default:
-		break;
-	}
-
-	return address;
-}
 
 void Block_manager::print_cost_status()
 {
@@ -292,7 +300,8 @@ void Block_manager::print_cost_status()
 
 void Block_manager::erase_and_invalidate(Event &event, Address &address, block_type btype)
 {
-	Event erase_event = Event(ERASE, event.get_logical_address(), 1, event.get_start_time()+event.get_time_taken());
+	assert(ftl->get_block_pointer(address)->get_block_type() == btype);
+	Event erase_event = Event(ERASE, event.get_logical_address(), 1, event.get_total_time());
 	erase_event.set_address(address);
 
 	if (ftl->controller.issue(erase_event) == FAILURE) { assert(false);}
@@ -306,8 +315,6 @@ void Block_manager::erase_and_invalidate(Event &event, Address &address, block_t
 		break;
 	case LOG:
 		log_active--;
-		break;
-	case LOG_SEQ:
 		break;
 	}
 

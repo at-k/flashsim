@@ -43,7 +43,6 @@ int main(int argc, char **argv)
 	char read_file_name[100] = "";
 	char write_file_name[100] = "";
 	std::set<unsigned int> addresses;
-	unsigned int lastLBA = (SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * PLANE_SIZE * BLOCK_SIZE);
 	FILE *read_file;
 	FILE *write_file;
 	double initial_delay;
@@ -65,6 +64,7 @@ int main(int argc, char **argv)
 	char ftl_implementation[10] = {'0' + FTL_IMPLEMENTATION};
 
 
+	unsigned int lastLBA = NUMBER_OF_ADDRESSABLE_BLOCKS * BLOCK_SIZE;
 
 
 	strcat(read_file_name, "read_");
@@ -128,7 +128,6 @@ int main(int argc, char **argv)
 		response_times.push_back(initial_delay + result);
 		count[i]++;
 	}
-
 	bool loop = false;
 	for(unsigned int i=0;i<q_depth;i++)
 	{
@@ -138,7 +137,6 @@ int main(int argc, char **argv)
 			break;
 		}
 	}
-
 
 
 	while(loop)

@@ -141,6 +141,12 @@ double Event::get_time_taken(void) const
 	return time_taken;
 }
 
+double Event::get_total_time(void) const
+{
+	assert(time_taken >= 0.0);
+	return time_taken + start_time;
+}
+
 double Event::get_bus_wait_time(void) const
 {
 	assert(bus_wait_time >= 0.0);

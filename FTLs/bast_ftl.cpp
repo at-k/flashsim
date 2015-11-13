@@ -294,7 +294,8 @@ bool FtlImpl_Bast::is_sequential(LogPageBlock* logBlock, long lba, Event &event)
 
 	if (isSequential)
 	{
-		Block_manager::instance()->promote_block(DATA);
+		/************************* CHANGED FUNCTION DEFINITION ********************/
+//		Block_manager::instance()->promote_block(DATA);
 
 		// Add to empty list i.e. switch without erasing the datablock.
 		if (data_list[lba] != -1)

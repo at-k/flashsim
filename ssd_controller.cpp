@@ -58,6 +58,9 @@ Controller::Controller(Ssd &parent):
 	case 4:
 		ftl = new FtlImpl_BDftl(*this);
 		break;
+	case 5:
+		ftl = new FtlImpl_Fast_Improved(*this);
+		break;
 	}
 	return;
 }
@@ -96,9 +99,9 @@ enum status Controller::issue(Event &event_list)
 		else if(cur -> get_event_type() == READ)
 		{
 			assert(cur -> get_address().valid > NONE);
-			if(ssd.bus.lock(cur -> get_address().package, cur -> get_start_time(), BUS_CTRL_DELAY, *cur) == FAILURE
+			if(ssd.bus.lock(cur -> get_address().package, cur -> get_total_time(), BUS_CTRL_DELAY, *cur) == FAILURE
 				|| ssd.read(*cur) == FAILURE
-				|| ssd.bus.lock(cur -> get_address().package, cur -> get_time_taken(), BUS_CTRL_DELAY + BUS_DATA_DELAY, *cur) == FAILURE
+				|| ssd.bus.lock(cur -> get_address().package, cur -> get_total_time(), BUS_CTRL_DELAY + BUS_DATA_DELAY, *cur) == FAILURE
 				|| ssd.ram.write(*cur) == FAILURE
 				|| ssd.ram.read(*cur) == FAILURE
 				|| ssd.replace(*cur) == FAILURE)
@@ -107,7 +110,7 @@ enum status Controller::issue(Event &event_list)
 		else if(cur -> get_event_type() == WRITE)
 		{
 			assert(cur -> get_address().valid > NONE);
-			if(ssd.bus.lock(cur -> get_address().package, cur -> get_start_time(), BUS_CTRL_DELAY + BUS_DATA_DELAY, *cur) == FAILURE
+			if(ssd.bus.lock(cur -> get_address().package, cur -> get_total_time(), BUS_CTRL_DELAY + BUS_DATA_DELAY, *cur) == FAILURE
 				|| ssd.ram.write(*cur) == FAILURE
 				|| ssd.ram.read(*cur) == FAILURE
 				|| ssd.write(*cur) == FAILURE
@@ -117,7 +120,7 @@ enum status Controller::issue(Event &event_list)
 		else if(cur -> get_event_type() == ERASE)
 		{
 			assert(cur -> get_address().valid > NONE);
-			if(ssd.bus.lock(cur -> get_address().package, cur -> get_start_time(), BUS_CTRL_DELAY, *cur) == FAILURE
+			if(ssd.bus.lock(cur -> get_address().package, cur -> get_total_time(), BUS_CTRL_DELAY, *cur) == FAILURE
 				|| ssd.erase(*cur) == FAILURE)
 				return FAILURE;
 		}
@@ -125,7 +128,7 @@ enum status Controller::issue(Event &event_list)
 		{
 			assert(cur -> get_address().valid > NONE);
 			assert(cur -> get_merge_address().valid > NONE);
-			if(ssd.bus.lock(cur -> get_address().package, cur -> get_start_time(), BUS_CTRL_DELAY, *cur) == FAILURE
+			if(ssd.bus.lock(cur -> get_address().package, cur -> get_total_time(), BUS_CTRL_DELAY, *cur) == FAILURE
 				|| ssd.merge(*cur) == FAILURE)
 				return FAILURE;
 		}
