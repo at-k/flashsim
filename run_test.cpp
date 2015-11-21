@@ -23,6 +23,8 @@
  * driver to create and run a very basic test of writes then reads */
 
 #include "ssd.h"
+#include <time.h>
+#include <stdlib.h>
 
 #define SIZE 130
 
@@ -32,78 +34,48 @@ int main()
 {
 	load_config();
 	print_config(NULL);
-   //printf("Press ENTER to continue...");
-   //getchar();
-   printf("\n");
-
 	Ssd *ssd = new Ssd();
 
 	double result;
+	srand(time(NULL));
+	
+	FILE *log_file = fopen("./test_output.log", "w");
 
-//	// Test one write to some blocks.
-//	for (int i = 0; i < SIZE; i++)
-//	{
-//		/* event_arrive(event_type, logical_address, size, start_time) */
-//		result = ssd -> event_arrive(WRITE, i*100000, 1, (double) 1+(250*i));
-//
-//		printf("Write time: %.20lf\n", result);
-////		result = ssd -> event_arrive(WRITE, i+10240, 1, (double) 1);
-////
-//	}
-//	for (int i = 0; i < SIZE; i++)
-//	{
-//		/* event_arrive(event_type, logical_address, size, start_time) */
-//		result = ssd -> event_arrive(READ, i*100000, 1, (double) 1+(500*i));
-//		printf("Read time : %.20lf\n", result);
-////		result = ssd -> event_arrive(READ, i, 1, (double) 1);
-////		printf("Read time : %.20lf\n", result);
-//	}
+	int LAST_LBA = NUMBER_OF_ADDRESSABLE_BLOCKS * BLOCK_SIZE;
 
-//	// Test writes and read to same block.
-//	for (int i = 0; i < SIZE; i++)
-//	{
-//		result = ssd -> event_arrive(WRITE, i%64, 1, (double) 1+(250*i));
-//
-//		printf("Write time: %.20lf\n", result);
-//	}
-//	for (int i = 0; i < SIZE; i++)
-//	{
-//		result = ssd -> event_arrive(READ, i%64, 1, (double) 1+(500*i));
-//		printf("Read time : %.20lf\n", result);
-//	}
+	int NUM_PAGES = 0.9 * LAST_LBA;
+	int i;
+	for (i = 0; i < NUM_PAGES; i++)
+	{
+		/* event_arrive(event_type, logical_address, size, start_time) */
+		result = ssd -> event_arrive(WRITE, i%LAST_LBA, 1, (double) (350 * i));
+	}
 
-	// Test random writes to a block
-	result = ssd -> event_arrive(WRITE, 1, 1, (double) 0.0);
-	//printf("Write time: %.20lf\n", result);
-	result = ssd -> event_arrive(WRITE, 1, 1, (double) 300.0);
-	//printf("Write time: %.20lf\n", result);
-	result = ssd -> event_arrive(WRITE, 1, 1, (double) 600.0);
-	//printf("Write time: %.20lf\n", result);
-	result = ssd -> event_arrive(WRITE, 1, 1, (double) 900.0);
-	//printf("Write time: %.20lf\n", result);
-	result = ssd -> event_arrive(READ, 1, 1, (double) 1200.0);
-	//printf("Write time: %.20lf\n", result);
-	//result = ssd -> event_arrive(WRITE, 0, 1, (double) 1500.0);
-	//printf("Write time: %.20lf\n", result);
+	printf("Experiment Starting\n");
+	double initial_delay = i * 350;
+	double experiment_start_time = initial_delay;
+	double experiment_end_time = -1;
+	for (i = 0; i < 100000 + 6000; i++)
+	{
+		unsigned int add = rand()%LAST_LBA;
+		double read_time = initial_delay + (i * 100);
+		result = ssd -> event_arrive(READ, add, 1, read_time);
+		if(read_time + result > experiment_end_time)
+		{
+			experiment_end_time = read_time + result;
+		}
+		fprintf(log_file, "%.5lf\n", result);
+		if(i%5 == 0 && i < 100000)
+		{
+			add = rand()%LAST_LBA;
+			double write_time = initial_delay + (i*100);
+			result = ssd -> event_arrive(WRITE, add, 1, write_time);
+			if(write_time + result > experiment_end_time)
+				experiment_end_time = write_time + result;
+		}
+	}
 
-	int NUM_PAGES = NUMBER_OF_ADDRESSABLE_BLOCKS * BLOCK_SIZE;
-
-	//for (int i = 0; i < NUM_PAGES; i++)
-	//{
-	//	/* event_arrive(event_type, logical_address, size, start_time) */
-	//	result = ssd -> event_arrive(WRITE, i, 1, (double) 1800+(300*i));
-	//	printf("Write time: %.20lf\n", result);
-	//}
-
-	//// Force Merge
-	//result = ssd -> event_arrive(WRITE, 10 , 1, (double) 0.0);
-	//printf("Write time: %.20lf\n", result);
-//	for (int i = 0; i < SIZE; i++)
-//	{
-//		/* event_arrive(event_type, logical_address, size, start_time) */
-//		result = ssd -> event_arrive(READ, i%64, 1, (double) 1+(500*i));
-//		printf("Read time : %.20lf\n", result);
-//	}
+	//fprintf(log_file, "%.5f %.5f\n", experiment_start_time, experiment_end_time);
 
 	delete ssd;
 	return 0;

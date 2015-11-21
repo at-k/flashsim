@@ -88,36 +88,36 @@ Die::~Die(void)
 	return;
 }
 
-enum status Die::read(Event &event)
+enum status Die::read(Event &event, bool remove)
 {
 	assert(data != NULL);
 	assert(event.get_address().plane < size && event.get_address().valid > DIE);
-	return data[event.get_address().plane].read(event);
+	return data[event.get_address().plane].read(event, remove);
 }
 
-enum status Die::write(Event &event)
+enum status Die::write(Event &event, bool remove)
 {
 	assert(data != NULL);
 	assert(event.get_address().plane < size && event.get_address().valid > DIE);
-	return data[event.get_address().plane].write(event);
+	return data[event.get_address().plane].write(event, remove);
 }
 
-enum status Die::replace(Event &event)
+enum status Die::replace(Event &event, bool remove)
 {
 	assert(data != NULL);
 	assert(event.get_address().plane < size);
-	return data[event.get_replace_address().plane].replace(event);
+	return data[event.get_replace_address().plane].replace(event, remove);
 }
 
 /* if no errors
  * 	updates last_erase_time if later time
  * 	updates erases_remaining if smaller value
  * returns 1 for success, 0 for failure */
-enum status Die::erase(Event &event)
+enum status Die::erase(Event &event, bool remove)
 {
 	assert(data != NULL);
 	assert(event.get_address().plane < size && event.get_address().valid > DIE);
-	enum status status = data[event.get_address().plane].erase(event);
+	enum status status = data[event.get_address().plane].erase(event, remove);
 
 	/* update values if no errors */
 	if(status == SUCCESS)
@@ -127,18 +127,18 @@ enum status Die::erase(Event &event)
 
 /* TODO: move Plane::_merge() to Die and make generic to handle merge across
  * 	both cases: 2 separate planes or within 1 plane */
-enum status Die::merge(Event &event)
+enum status Die::merge(Event &event, bool remove)
 {
 	assert(data != NULL);
 	assert(event.get_address().plane < size && event.get_address().valid > DIE && event.get_merge_address().plane < size && event.get_merge_address().valid > DIE);
 	if(event.get_address().plane != event.get_merge_address().plane)
 		return _merge(event);
-	else return data[event.get_address().plane]._merge(event);
+	else return data[event.get_address().plane]._merge(event, remove);
 }
 
 /* TODO: update stub as per Die::merge() comment above
  * to support Die-level merge operations */
-enum status Die::_merge(Event &event)
+enum status Die::_merge(Event &event, bool remove)
 {
 	assert(data != NULL);
 	assert(event.get_address().plane < size && event.get_address().valid > DIE && event.get_merge_address().plane < size && event.get_merge_address().valid > DIE);

@@ -123,7 +123,7 @@ int main(int argc, char **argv)
 				location = rand()%lastLBA;
 			}
 			result = ssd->event_arrive(READ, location, 1, (double) initial_delay);
-			fprintf(read_file, "%.5lf\n", result);
+			fprintf(read_file, "%.5lf\t%.5lf\n", initial_delay, result);
 		}
 		response_times.push_back(initial_delay + result);
 		count[i]++;
@@ -169,7 +169,7 @@ int main(int argc, char **argv)
 				location = rand()%lastLBA;
 			}
 			result = ssd->event_arrive(READ, location, 1, (double) next_request_time);
-			fprintf(read_file, "%.5lf\n", result);
+			fprintf(read_file, "%.5lf\t%.5lf\n", next_request_time, result);
 			count[position]++;
 		}
 		response_times.insert(min_val_reference, next_request_time + result);

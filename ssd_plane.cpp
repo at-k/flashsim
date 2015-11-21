@@ -49,7 +49,10 @@ Plane::Plane(const Die &parent, uint plane_size, double reg_read_delay, double r
 	/* assume hardware created at time 0 and had an implied free erasure */
 	last_erase_time(0.0),
 
-	free_blocks(size)
+	free_blocks(size), 
+
+	/*Flag for storing -1*/
+	PLANE_NOOP(-1)
 {
 	uint i;
 
@@ -94,10 +97,8 @@ Plane::Plane(const Die &parent, uint plane_size, double reg_read_delay, double r
 		(void) new (&data[i]) Block(*this, BLOCK_SIZE, BLOCK_ERASES, BLOCK_ERASE_DELAY,physical_address+(i*BLOCK_SIZE));
 	}
 
-	plane_operation = P_NONE;
-	plane_operation_start_time = PLANE_INACTIVE_FLAG;
-	plane_operation_end_time = PLANE_INACTIVE_FLAG;
 
+	timings.reserve(4096);
 	return;
 }
 
@@ -113,46 +114,24 @@ Plane::~Plane(void)
 	return;
 }
 
-enum status Plane::read(Event &event)
+enum status Plane::read(Event &event, bool remove)
 {
 	assert(event.get_address().block < size && event.get_address().valid > PLANE);
 
-	if(plane_operation_start_time != PLANE_INACTIVE_FLAG && plane_operation_end_time != PLANE_INACTIVE_FLAG)
-	{
-		double cur_event_time = event.get_total_time();
-		if(cur_event_time + PAGE_READ_DELAY <= plane_operation_start_time || 
-			plane_operation_end_time <= cur_event_time )
-		{}
-		else
-		{
-			//printf("read had at %d to wait %f\n", plane_operation, plane_operation_end_time - cur_event_time);
-			event.incr_time_taken(plane_operation_end_time - cur_event_time);
-		}
-	}
-	plane_operation = P_READ;
-	plane_operation_start_time = event.get_total_time();
-	plane_operation_end_time = event.get_total_time() + PAGE_READ_DELAY;
+	double start_time = event.get_total_time();
+	double duration = PAGE_READ_DELAY;
+	serialize_access(start_time, duration, event, remove);
+
 	return data[event.get_address().block].read(event);
 }
 
-enum status Plane::write(Event &event)
+enum status Plane::write(Event &event, bool remove)
 {
 	assert(event.get_address().block < size && event.get_address().valid > PLANE && next_page.valid >= BLOCK);
 
-	if(plane_operation_start_time != PLANE_INACTIVE_FLAG && plane_operation_end_time != PLANE_INACTIVE_FLAG)
-	{
-		double cur_event_time = event.get_total_time();
-		if(cur_event_time + PAGE_WRITE_DELAY <= plane_operation_start_time || 
-			plane_operation_end_time <= cur_event_time )
-		{}
-		else
-		{
-			event.incr_time_taken(plane_operation_end_time - cur_event_time);
-		}
-	}
-	plane_operation = P_WRITE;
-	plane_operation_start_time = event.get_total_time();
-	plane_operation_end_time = event.get_total_time() + PAGE_WRITE_DELAY;
+	double start_time = event.get_total_time();
+	double duration = PAGE_WRITE_DELAY;
+	serialize_access(start_time, duration, event, remove);
 
 	enum block_state prev = data[event.get_address().block].get_state();
 
@@ -169,7 +148,7 @@ enum status Plane::write(Event &event)
 	return s;
 }
 
-enum status Plane::replace(Event &event)
+enum status Plane::replace(Event &event, bool remove)
 {
 	assert(event.get_address().block < size);
 	return data[event.get_replace_address().block].replace(event);
@@ -180,24 +159,13 @@ enum status Plane::replace(Event &event)
  * 	updates last_erase_time if later time
  * 	updates erases_remaining if smaller value
  * returns 1 for success, 0 for failure */
-enum status Plane::erase(Event &event)
+enum status Plane::erase(Event &event, bool remove)
 {
 	assert(event.get_address().block < size && event.get_address().valid > PLANE);
-	if(plane_operation_start_time != PLANE_INACTIVE_FLAG && plane_operation_end_time != PLANE_INACTIVE_FLAG)
-	{
-		double cur_event_time = event.get_total_time();
-		if(cur_event_time + BLOCK_ERASE_DELAY <= plane_operation_start_time || 
-			plane_operation_end_time <= cur_event_time )
-		{}
-		else
-		{
-			event.incr_time_taken(plane_operation_end_time - cur_event_time);
-		}
-	}
-	//printf("starting an erase\n");
-	plane_operation = P_ERASE;
-	plane_operation_start_time = event.get_total_time();
-	plane_operation_end_time = event.get_total_time() + BLOCK_ERASE_DELAY;
+
+	double start_time = event.get_total_time();
+	double duration = BLOCK_ERASE_DELAY;
+	serialize_access(start_time, duration, event, remove);
 
 	enum status status = data[event.get_address().block]._erase(event);
 
@@ -219,7 +187,7 @@ enum status Plane::erase(Event &event)
  * 	move event::address valid pages to event::address_merge empty pages
  * creates own events for resulting read/write operations
  * supports blocks that have different sizes */
-enum status Plane::_merge(Event &event)
+enum status Plane::_merge(Event &event, bool remove)
 {
 	assert(event.get_address().block < size && event.get_address().valid > PLANE);
 	assert(reg_read_delay >= 0.0 && reg_write_delay >= 0.0);
@@ -452,4 +420,109 @@ Block *Plane::get_block_pointer(const Address & address)
 {
 	assert(address.valid >= PLANE);
 	return data[address.block].get_pointer();
+}
+
+void Plane::unlock(double start_time, bool remove)
+{
+	/* remove expired channel lock entries */
+	if(remove)
+	{	
+		std::vector<lock_times>::iterator it;
+		for ( it = timings.begin(); it < timings.end();)
+		{
+			if((*it).unlock_time <= start_time)
+				timings.erase(it);
+			else
+			{
+				it++;
+			}
+		}
+	}
+	std::sort(timings.begin(), timings.end(), &timings_sorter);
+}
+
+bool Plane::timings_sorter(lock_times const& lhs, lock_times const& rhs) {
+    return lhs.lock_time < rhs.lock_time;
+}
+
+void Plane::serialize_access(double start_time, double duration, Event &event, bool remove)
+{
+	assert(start_time >= 0.0);
+	assert(duration >= 0.0);
+
+	/*Print job info*/
+	//printf("Plane Access --- start_time: %f, duration: %f\n", start_time, duration);
+
+
+	/* free up any table slots and sort existing ones */
+	if(remove)
+		unlock(event.get_start_time(), remove);
+	else
+		unlock(start_time, remove);
+
+	double sched_time = PLANE_NOOP;
+
+	/* just schedule if table is empty */
+	if(timings.size() == 0)
+		sched_time = start_time;
+
+	else if (timings.back().unlock_time < start_time)
+		sched_time = start_time;
+	/* check if can schedule before or in between before just scheduling
+	 * after all other events */
+	else
+	{
+		/* skip over empty table entries
+		 * empty table entries will be first from sorting (in unlock method)
+		 * because the flag is a negative value */
+		std::vector<lock_times>::iterator it = timings.begin();
+
+		/* schedule before first event in table */
+		if((*it).lock_time > start_time && (*it).lock_time - start_time >= duration)
+		{
+			//printf("Plane Access --- could schedule brfore starting %f\n", (*it).lock_time);
+			sched_time = start_time;
+		}
+
+		/* schedule in between other events in table */
+		if(sched_time == BUS_CHANNEL_FREE_FLAG)
+		{
+			for(; it < timings.end(); it++)
+			{
+				if (it + 1 != timings.end())
+				{
+					/* enough time to schedule in between next two events */
+					if((*it).unlock_time >= start_time  && (*(it+1)).lock_time - (*it).unlock_time >= duration)
+					{
+						//printf("Plane Access --- found time to schedule between %f and %f\n", (*it).lock_time, (*(it+1)).lock_time);
+						sched_time = (*it).unlock_time;
+						break;
+					}
+					else if((*it).unlock_time <= start_time && (*(it+1)).lock_time - start_time >= duration)
+					{
+						//printf("Plane Access --- found time to schedule between %f and %f\n", start_time, (*(it+1)).lock_time);
+						sched_time = start_time;
+						break;
+					}
+				}
+
+			}
+		}
+
+		/* schedule after all events in table */
+		if(sched_time == PLANE_NOOP)
+		{
+			//printf("Plane Access --- scheduling after all at %f\n", timings.back().unlock_time);
+			sched_time = timings.back().unlock_time;
+		}
+	}
+
+	/* write scheduling info in free table slot */
+	lock_times lt;
+	lt.lock_time = sched_time;
+	lt.unlock_time = sched_time + duration;
+	timings.push_back(lt);
+
+	/* update event times for bus wait and time taken */
+	event.incr_time_taken(sched_time - start_time);
 }

@@ -148,7 +148,7 @@ enum status FtlImpl_Fast::read(Event &event)
 
 	// Statistics
 	controller.stats.numFTLRead++;
-	return controller.issue(event);
+	return controller.issue(event, true);
 }
 
 enum status FtlImpl_Fast::write(Event &event)
@@ -201,7 +201,7 @@ enum status FtlImpl_Fast::write(Event &event)
 	
 
 	if(issueEventRequired)
-		return controller.issue(event);
+		return controller.issue(event, true);
 	else
 		return logWriteReturnStatus;	
 }
@@ -352,7 +352,7 @@ enum status FtlImpl_Fast::merge_sequential(Event &event, bool issueWrite)
 		if(issueWrite && i==lbnOffset)
 		{
 			event.set_address(Address(newDataBlock.get_linear_address() + i, PAGE));
-			retStatus = controller.issue(event);
+			retStatus = controller.issue(event, true);
 		}
 		else
 		{
@@ -637,7 +637,7 @@ enum status FtlImpl_Fast::write_to_log_block(Event &event, long logicalBlockAddr
 	}
 	else
 	{
-		return writeEventStatus;
+		return SUCCESS;
 	}
 }
 

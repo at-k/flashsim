@@ -186,32 +186,32 @@ void *Ssd::get_result_buffer()
  * technically the Package is conceptual, but we keep track of statistics
  * 	and addresses with Packages, so send Events through Package but do not 
  * 	have Package do anything but update its statistics and pass on to Die */
-enum status Ssd::read(Event &event)
+enum status Ssd::read(Event &event, bool remove)
 {
 	assert(data != NULL && event.get_address().package < size && event.get_address().valid >= PACKAGE);
-	return data[event.get_address().package].read(event);
+	return data[event.get_address().package].read(event, remove);
 }
 
-enum status Ssd::write(Event &event)
+enum status Ssd::write(Event &event, bool remove)
 {
 	assert(data != NULL && event.get_address().package < size && event.get_address().valid >= PACKAGE);
-	return data[event.get_address().package].write(event);
+	return data[event.get_address().package].write(event, remove);
 }
 
-enum status Ssd::replace(Event &event)
+enum status Ssd::replace(Event &event, bool remove)
 {
 	assert(data != NULL && event.get_replace_address().package < size);
 	if (event.get_replace_address().valid == PAGE)
-		return data[event.get_replace_address().package].replace(event);
+		return data[event.get_replace_address().package].replace(event, remove);
 	else
 		return SUCCESS;
 }
 
 
-enum status Ssd::erase(Event &event)
+enum status Ssd::erase(Event &event, bool remove)
 {
 	assert(data != NULL && event.get_address().package < size && event.get_address().valid >= PACKAGE);
-	enum status status = data[event.get_address().package].erase(event);
+	enum status status = data[event.get_address().package].erase(event, remove);
 
 	/* update values if no errors */
 	if (status == SUCCESS)
@@ -219,13 +219,13 @@ enum status Ssd::erase(Event &event)
 	return status;
 }
 
-enum status Ssd::merge(Event &event)
+enum status Ssd::merge(Event &event, bool remove)
 {
 	assert(data != NULL && event.get_address().package < size && event.get_address().valid >= PACKAGE);
-	return data[event.get_address().package].merge(event);
+	return data[event.get_address().package].merge(event, remove);
 }
 
-enum status Ssd::merge_replacement_block(Event &event)
+enum status Ssd::merge_replacement_block(Event &event, bool remove)
 {
 	//assert(data != NULL && event.get_address().package < size && event.get_address().valid >= PACKAGE && event.get_log_address().valid >= PACKAGE);
 	return SUCCESS;

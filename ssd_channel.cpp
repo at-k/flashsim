@@ -120,7 +120,7 @@ enum status Channel::disconnect(void)
  * event is sent across bus as soon as bus channel is available
  * event may fail if bus channel is saturated so check return value
  */
-enum status Channel::lock(double start_time, double duration, Event &event)
+enum status Channel::lock(double start_time, double duration, Event &event, bool remove)
 {
 	assert(num_connected <= max_connections);
 	assert(ctrl_delay >= 0.0);
@@ -128,15 +128,25 @@ enum status Channel::lock(double start_time, double duration, Event &event)
 	assert(start_time >= 0.0);
 	assert(duration >= 0.0);
 
-	/* free up any table slots and sort existing ones */
-	unlock(start_time);
 
+	/*Print job info*/
+	//printf("type: %d, start_time: %f, duration: %f\n", event.get_event_type(), start_time, duration);
+
+
+	/* free up any table slots and sort existing ones */
+	if(remove)
+		unlock(event.get_start_time(), remove);
+	else
+		unlock(start_time, remove);
+	
 	double sched_time = BUS_CHANNEL_FREE_FLAG;
 
 	/* just schedule if table is empty */
 	if(timings.size() == 0)
 		sched_time = start_time;
 
+	else if (timings.back().unlock_time < start_time)
+		sched_time = start_time;
 	/* check if can schedule before or in between before just scheduling
 	 * after all other events */
 	else
@@ -148,7 +158,10 @@ enum status Channel::lock(double start_time, double duration, Event &event)
 
 		/* schedule before first event in table */
 		if((*it).lock_time > start_time && (*it).lock_time - start_time >= duration)
+		{
+			//printf("could schedule brfore starting %f\n", (*it).lock_time);
 			sched_time = start_time;
+		}
 
 		/* schedule in between other events in table */
 		if(sched_time == BUS_CHANNEL_FREE_FLAG)
@@ -160,7 +173,14 @@ enum status Channel::lock(double start_time, double duration, Event &event)
 					/* enough time to schedule in between next two events */
 					if((*it).unlock_time >= start_time  && (*(it+1)).lock_time - (*it).unlock_time >= duration)
 					{
+						//printf("found time to schedule between %f and %f\n", (*it).lock_time, (*(it+1)).lock_time);
 						sched_time = (*it).unlock_time;
+						break;
+					}
+					else if((*it).unlock_time <= start_time && (*(it+1)).lock_time - start_time >= duration)
+					{
+						//printf("found time to schedule between %f and %f\n", start_time, (*(it+1)).lock_time);
+						sched_time = start_time;
 						break;
 					}
 				}
@@ -170,7 +190,10 @@ enum status Channel::lock(double start_time, double duration, Event &event)
 
 		/* schedule after all events in table */
 		if(sched_time == BUS_CHANNEL_FREE_FLAG)
+		{
+			//printf("scheduling after all at %f\n", timings.back().unlock_time);
 			sched_time = timings.back().unlock_time;
+		}
 	}
 
 	/* write scheduling info in free table slot */
@@ -192,17 +215,20 @@ enum status Channel::lock(double start_time, double duration, Event &event)
 /* remove all expired entries (finish time is less than provided time)
  * update current number of table entries used
  * sort table by finish times (2nd row) */
-void Channel::unlock(double start_time)
+void Channel::unlock(double start_time, bool remove)
 {
 	/* remove expired channel lock entries */
-	std::vector<lock_times>::iterator it;
-	for ( it = timings.begin(); it < timings.end();)
+	if(remove)
 	{
-		if((*it).unlock_time <= start_time)
-			timings.erase(it);
-		else
+		std::vector<lock_times>::iterator it;
+		for ( it = timings.begin(); it < timings.end();)
 		{
-			it++;
+			if((*it).unlock_time <= start_time)
+				timings.erase(it);
+			else
+			{
+				it++;
+			}
 		}
 	}
 	std::sort(timings.begin(), timings.end(), &timings_sorter);

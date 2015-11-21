@@ -115,10 +115,10 @@ enum status Bus::disconnect(uint channel)
  * assumes event is sent across channel as soon as bus is available
  * event may fail if channel is saturated so check return value
  */
-enum status Bus::lock(uint channel, double start_time, double duration, Event &event)
+enum status Bus::lock(uint channel, double start_time, double duration, Event &event, bool remove)
 {
 	assert(channels != NULL && start_time >= 0.0 && duration > 0.0);
-	return channels[channel].lock(start_time, duration, event);
+	return channels[channel].lock(start_time, duration, event, remove);
 }
 
 Channel &Bus::get_channel(uint channel)

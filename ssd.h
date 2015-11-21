@@ -205,7 +205,6 @@ enum status{FAILURE, SUCCESS};
 enum address_valid{NONE, PACKAGE, DIE, PLANE, BLOCK, PAGE};
 
 
-enum operation{P_NONE, P_READ, P_WRITE, P_ERASE};
 
 /*
  * Block type status
@@ -416,6 +415,10 @@ private:
 	bool noop;
 };
 
+struct lock_times {
+	double lock_time;
+	double unlock_time;
+};
 /* Single bus channel
  * Simulate multiple devices on 1 bus channel with variable bus transmission
  * durations for data and control delays with the Channel class.  Provide the 
@@ -430,21 +433,17 @@ class Channel
 public:
 	Channel(double ctrl_delay = BUS_CTRL_DELAY, double data_delay = BUS_DATA_DELAY, uint table_size = BUS_TABLE_SIZE, uint max_connections = BUS_MAX_CONNECT);
 	~Channel(void);
-	enum status lock(double start_time, double duration, Event &event);
+	enum status lock(double start_time, double duration, Event &event, bool remove = false);
 	enum status connect(void);
 	enum status disconnect(void);
 	double ready_time(void);
-private:
-	void unlock(double current_time);
+	void unlock(double current_time, bool remove = false);
 
-	struct lock_times {
-		double lock_time;
-		double unlock_time;
-	};
 
 	static bool timings_sorter(lock_times const& lhs, lock_times const& rhs);
 	std::vector<lock_times> timings;
 
+private:
 	uint table_entries;
 	uint selected_entry;
 	uint num_connected;
@@ -469,7 +468,7 @@ class Bus
 public:
 	Bus(uint num_channels = SSD_SIZE, double ctrl_delay = BUS_CTRL_DELAY, double data_delay = BUS_DATA_DELAY, uint table_size = BUS_TABLE_SIZE, uint max_connections = BUS_MAX_CONNECT);
 	~Bus(void);
-	enum status lock(uint channel, double start_time, double duration, Event &event);
+	enum status lock(uint channel, double start_time, double duration, Event &event, bool remove = false);
 	enum status connect(uint channel);
 	enum status disconnect(uint channel);
 	Channel &get_channel(uint channel);
@@ -552,11 +551,11 @@ class Plane
 public:
 	Plane(const Die &parent, uint plane_size = PLANE_SIZE, double reg_read_delay = PLANE_REG_READ_DELAY, double reg_write_delay = PLANE_REG_WRITE_DELAY, long physical_address = 0);
 	~Plane(void);
-	enum status read(Event &event);
-	enum status write(Event &event);
-	enum status erase(Event &event);
-	enum status replace(Event &event);
-	enum status _merge(Event &event);
+	enum status read(Event &event, bool remove = false);
+	enum status write(Event &event, bool remove = false);
+	enum status erase(Event &event, bool remove = false);
+	enum status replace(Event &event, bool remove = false);
+	enum status _merge(Event &event, bool remove = false);
 	const Die &get_parent(void) const;
 	double get_last_erase_time(const Address &address) const;
 	ulong get_erases_remaining(const Address &address) const;
@@ -569,8 +568,13 @@ public:
 	ssd::uint get_num_valid(const Address &address) const;
 	ssd::uint get_num_invalid(const Address &address) const;
 	Block *get_block_pointer(const Address & address);
+	void unlock(double start_time, bool remove);
+	static bool timings_sorter(lock_times const& lhs, lock_times const& rhs);
+	std::vector<lock_times> timings;
+	const int PLANE_NOOP;
 private:
 	void update_wear_stats(void);
+	void serialize_access(double start_time, double duration, Event &event, bool remove);
 	enum status get_next_page(void);
 	uint size;
 	Block * const data;
@@ -582,9 +586,6 @@ private:
 	double reg_write_delay;
 	Address next_page;
 	uint free_blocks;
-	enum operation plane_operation;
-	double plane_operation_start_time;
-	double plane_operation_end_time;
 };
 
 /* The die is the data storage hardware unit that contains planes and is a flash
@@ -594,12 +595,12 @@ class Die
 public:
 	Die(const Package &parent, Channel &channel, uint die_size = DIE_SIZE, long physical_address = 0);
 	~Die(void);
-	enum status read(Event &event);
-	enum status write(Event &event);
-	enum status erase(Event &event);
-	enum status replace(Event &event);
-	enum status merge(Event &event);
-	enum status _merge(Event &event);
+	enum status read(Event &event, bool remove = false);
+	enum status write(Event &event, bool remove = false);
+	enum status erase(Event &event, bool remove = false);
+	enum status replace(Event &event, bool remove = false);
+	enum status merge(Event &event, bool remove = false);
+	enum status _merge(Event &event, bool remove = false);
 	const Package &get_parent(void) const;
 	double get_last_erase_time(const Address &address) const;
 	ulong get_erases_remaining(const Address &address) const;
@@ -631,11 +632,11 @@ class Package
 public:
 	Package (const Ssd &parent, Channel &channel, uint package_size = PACKAGE_SIZE, long physical_address = 0);
 	~Package ();
-	enum status read(Event &event);
-	enum status write(Event &event);
-	enum status erase(Event &event);
-	enum status replace(Event &event);
-	enum status merge(Event &event);
+	enum status read(Event &event, bool remove = false);
+	enum status write(Event &event, bool remove = false);
+	enum status erase(Event &event, bool remove = false);
+	enum status replace(Event &event, bool remove = false);
+	enum status merge(Event &event, bool remove = false);
 	const Ssd &get_parent(void) const;
 	double get_last_erase_time (const Address &address) const;
 	ulong get_erases_remaining (const Address &address) const;
@@ -1051,7 +1052,7 @@ public:
 	void print_ftl_statistics();
 	const FtlParent &get_ftl(void) const;
 private:
-	enum status issue(Event &event_list);
+	enum status issue(Event &event_list, bool remove = false);
 	void translate_address(Address &address);
 	ssd::ulong get_erases_remaining(const Address &address) const;
 	void get_least_worn(Address &address) const;
@@ -1088,12 +1089,12 @@ public:
 	void print_ftl_statistics();
 	double ready_at(void);
 private:
-	enum status read(Event &event);
-	enum status write(Event &event);
-	enum status erase(Event &event);
-	enum status merge(Event &event);
-	enum status replace(Event &event);
-	enum status merge_replacement_block(Event &event);
+	enum status read(Event &event, bool remove = false);
+	enum status write(Event &event, bool remove = false);
+	enum status erase(Event &event, bool remove = false);
+	enum status merge(Event &event, bool remove = false);
+	enum status replace(Event &event, bool remove = false);
+	enum status merge_replacement_block(Event &event, bool remove = false);
 	ulong get_erases_remaining(const Address &address) const;
 	void update_wear_stats(const Address &address);
 	void get_least_worn(Address &address) const;
