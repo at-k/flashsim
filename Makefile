@@ -1,7 +1,7 @@
 CXX=g++
 CXXFLAGS=-Wall -c
 DEBUGFLAGS=-g
-LDFLAGS=
+LDFLAGS=-pg
 HEADERS=ssd.h
 SOURCES_SSDLIB = $(filter-out ssd_ftl.cpp, $(wildcard ssd_*.cpp))  \
                  $(wildcard FTLs/*.cpp)                            \

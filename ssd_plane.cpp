@@ -98,7 +98,7 @@ Plane::Plane(const Die &parent, uint plane_size, double reg_read_delay, double r
 	}
 
 
-	timings.reserve(4096);
+	//timings.reserve(4096);
 	return;
 }
 
@@ -455,19 +455,45 @@ void Plane::serialize_access(double start_time, double duration, Event &event, b
 
 
 	/* free up any table slots and sort existing ones */
+	/*
 	if(remove)
 		unlock(event.get_start_time(), remove);
 	else
 		unlock(start_time, remove);
-
+	*/
 	double sched_time = PLANE_NOOP;
+
+	std::vector<lock_times>::iterator it, insert_location, first, last;
+
+	//printf("The size for plane is %d\n", timings.size());
+
+	if(remove)
+	{
+		//printf("in the remove\n");
+		for(it=timings.begin();it!=timings.end();)
+		{
+			if((*it).unlock_time <= start_time)
+				timings.erase(it);
+			else
+				break;
+		}
+	}
+	
+	first = timings.begin();
+	last = timings.end();
 
 	/* just schedule if table is empty */
 	if(timings.size() == 0)
+	{
 		sched_time = start_time;
+		insert_location = first;
+	}
 
 	else if (timings.back().unlock_time < start_time)
+	{
 		sched_time = start_time;
+		insert_location = last;
+	}
 	/* check if can schedule before or in between before just scheduling
 	 * after all other events */
 	else
@@ -475,19 +501,20 @@ void Plane::serialize_access(double start_time, double duration, Event &event, b
 		/* skip over empty table entries
 		 * empty table entries will be first from sorting (in unlock method)
 		 * because the flag is a negative value */
-		std::vector<lock_times>::iterator it = timings.begin();
+		it = first;
 
 		/* schedule before first event in table */
 		if((*it).lock_time > start_time && (*it).lock_time - start_time >= duration)
 		{
 			//printf("Plane Access --- could schedule brfore starting %f\n", (*it).lock_time);
 			sched_time = start_time;
+			insert_location = first;
 		}
 
 		/* schedule in between other events in table */
 		if(sched_time == BUS_CHANNEL_FREE_FLAG)
 		{
-			for(; it < timings.end(); it++)
+			for(; it != last; it++)
 			{
 				if (it + 1 != timings.end())
 				{
@@ -496,12 +523,14 @@ void Plane::serialize_access(double start_time, double duration, Event &event, b
 					{
 						//printf("Plane Access --- found time to schedule between %f and %f\n", (*it).lock_time, (*(it+1)).lock_time);
 						sched_time = (*it).unlock_time;
+						insert_location = it + 1;
 						break;
 					}
 					else if((*it).unlock_time <= start_time && (*(it+1)).lock_time - start_time >= duration)
 					{
 						//printf("Plane Access --- found time to schedule between %f and %f\n", start_time, (*(it+1)).lock_time);
 						sched_time = start_time;
+						insert_location = it + 1;
 						break;
 					}
 				}
@@ -514,6 +543,7 @@ void Plane::serialize_access(double start_time, double duration, Event &event, b
 		{
 			//printf("Plane Access --- scheduling after all at %f\n", timings.back().unlock_time);
 			sched_time = timings.back().unlock_time;
+			insert_location = last;
 		}
 	}
 
@@ -521,7 +551,7 @@ void Plane::serialize_access(double start_time, double duration, Event &event, b
 	lock_times lt;
 	lt.lock_time = sched_time;
 	lt.unlock_time = sched_time + duration;
-	timings.push_back(lt);
+	timings.insert(insert_location, lt);
 
 	/* update event times for bus wait and time taken */
 	event.incr_time_taken(sched_time - start_time);

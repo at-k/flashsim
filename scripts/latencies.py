@@ -6,27 +6,33 @@ import matplotlib.pyplot as plt
 def main():
 
     filename_array = []
+    percentiles = [50, 99, 99.9];
+    threads = [2, 4, 8, 16, 32]
 
-
-    for util in [90]:
-        data_file = open('data_file_' + str(util) + '.dat', 'w')
-        for n_threads in [2, 4, 8, 16, 32, 64]:
-            ro_file = open('read_2_0_' + str(util) + '_' + str(n_threads) + '.out', 'r')
-            rw_file = open('read_2_1_' + str(util) + '_' + str(n_threads) + '.out', 'r')
+    data_file = open('data_file_90.dat', 'w')
+    for n_threads in threads:
+        repeated_latency_array = dict()
+        for p in percentiles:
+            repeated_latency_array[p] = []
+        
+        for i in range(0, 1):
+            rw_file = open('read_2_1_90_' + str(n_threads) + '.out', 'r')
            
-            ro_latencies = []
-            for line in ro_file:
-                ro_latencies.append(float(line.strip()))
 
             rw_latencies = []
             for line in rw_file:
-                rw_latencies.append(float(line.strip()))
-
-            data_file.write(str(2*n_threads) + '\t')
-            for p in [50, 90, 99, 99.9]:
-                data_file.write(str.format("{0:.2f}", numpy.percentile(ro_latencies, p)/1000) + '\t' + str.format("{0:.2f}", numpy.percentile(rw_latencies, p)/1000) + '\t')
+                rw_latencies.append(float(line.split()[-1].strip()))
             
-            data_file.write("\n")
+            for p in percentiles:
+                repeated_latency_array[p].append(numpy.percentile(rw_latencies, p)/1000.0)
+                
+        
+        data_file.write(str(2*n_threads) + '\t')
+        for p in percentiles:
+            #print n_threads, p, repeated_latency_array[p]
+            data_file.write(str.format("{0:.2f}", numpy.mean(repeated_latency_array[p])) + '\t')
+        
+        data_file.write("\n")
 
         
 

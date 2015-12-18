@@ -49,6 +49,11 @@ int main(int argc, char **argv)
 	unsigned int q_depth;
 	bool write_data;
 	unsigned int req_per_thread = 1000;
+	
+	unsigned int total_read_count = 20000, cur_read_count = 0;
+
+	int read_loc = 0;
+	int write_loc = 0;
 
 	load_config();
 	print_config(NULL);
@@ -64,6 +69,7 @@ int main(int argc, char **argv)
 	char ftl_implementation[10] = {'0' + FTL_IMPLEMENTATION};
 
 
+	printf("addressable blocks %d\n", NUMBER_OF_ADDRESSABLE_BLOCKS);
 	unsigned int lastLBA = NUMBER_OF_ADDRESSABLE_BLOCKS * BLOCK_SIZE;
 
 
@@ -112,22 +118,27 @@ int main(int argc, char **argv)
 		if(write_data && i >= q_depth/2)
 		{
 			location = rand()%lastLBA;
+			//location = write_loc++;
 			result = ssd->event_arrive(WRITE, location, 1, (double) initial_delay);
 			addresses.insert(location);
 		}	
 		else
 		{
+			
 			location = rand()%lastLBA;
 			while(addresses.find(location) == addresses.end())
 			{
 				location = rand()%lastLBA;
 			}
+			
 			result = ssd->event_arrive(READ, location, 1, (double) initial_delay);
+			cur_read_count++;
 			fprintf(read_file, "%.5lf\t%.5lf\n", initial_delay, result);
 		}
 		response_times.push_back(initial_delay + result);
 		count[i]++;
 	}
+	/*
 	bool loop = false;
 	for(unsigned int i=0;i<q_depth;i++)
 	{
@@ -137,19 +148,26 @@ int main(int argc, char **argv)
 			break;
 		}
 	}
+	*/
+	bool loop = true;
 
-
+	printf("startign experiment\n");
 	while(loop)
 	{
-		std::vector<double>::iterator iter, min_val_reference;
+		std::vector<double>::iterator iter, min_val_reference = response_times.end();
 		double min_val = -1;
 		for(iter=response_times.begin();iter!=response_times.end();iter++)
 		{
-			if((count[iter-response_times.begin()] < req_per_thread) && ((*iter) < min_val || min_val == -1))
+			//if((count[iter-response_times.begin()] < req_per_thread) && ((*iter) < min_val || min_val == -1))
+			if((*iter) < min_val || min_val == -1)
 			{
 				min_val = *iter;
 				min_val_reference = iter;
 			}
+		}
+		if(min_val_reference == response_times.end())
+		{
+			printf("problem\n");
 		}
 		response_times.erase(min_val_reference);
 		double next_request_time = min_val;
@@ -158,21 +176,33 @@ int main(int argc, char **argv)
 		if(write_data && position >= q_depth/2)
 		{
 			location = rand()%lastLBA;
+			//location = write_loc++;
+			addresses.insert(location);
 			result = ssd->event_arrive(WRITE, location, 1, (double) next_request_time);
 			count[position]++;
 		}	
 		else
 		{
+			
 			location = rand()%lastLBA;
 			while(addresses.find(location) == addresses.end())
 			{
 				location = rand()%lastLBA;
 			}
+			cur_read_count++;	
 			result = ssd->event_arrive(READ, location, 1, (double) next_request_time);
 			fprintf(read_file, "%.5lf\t%.5lf\n", next_request_time, result);
 			count[position]++;
 		}
 		response_times.insert(min_val_reference, next_request_time + result);
+		
+		if(cur_read_count > total_read_count)
+		{
+			loop = false;
+			break;
+		}
+			
+		/*	
 		loop = false;
 		for(unsigned int i=0;i<q_depth;i++)
 		{
@@ -182,7 +212,10 @@ int main(int argc, char **argv)
 				break;
 			}
 		}
+		*/
+		
 	}
+	printf("experiment ended\n");
 	delete ssd;
 	return 0;
 }

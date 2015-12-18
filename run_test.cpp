@@ -43,39 +43,32 @@ int main()
 
 	int LAST_LBA = NUMBER_OF_ADDRESSABLE_BLOCKS * BLOCK_SIZE;
 
+	int i = 0;
 	int NUM_PAGES = 0.9 * LAST_LBA;
-	int i;
 	for (i = 0; i < NUM_PAGES; i++)
 	{
-		/* event_arrive(event_type, logical_address, size, start_time) */
 		result = ssd -> event_arrive(WRITE, i%LAST_LBA, 1, (double) (350 * i));
 	}
-
 	printf("Experiment Starting\n");
 	double initial_delay = i * 350;
-	double experiment_start_time = initial_delay;
-	double experiment_end_time = -1;
-	for (i = 0; i < 100000 + 6000; i++)
+	for (i = 0; i < 10000; i++)
 	{
-		unsigned int add = rand()%LAST_LBA;
-		double read_time = initial_delay + (i * 100);
-		result = ssd -> event_arrive(READ, add, 1, read_time);
-		if(read_time + result > experiment_end_time)
-		{
-			experiment_end_time = read_time + result;
-		}
-		fprintf(log_file, "%.5lf\n", result);
-		if(i%5 == 0 && i < 100000)
+		double cur_time = initial_delay + (i*100);
+		unsigned int add = 0;
+		if(i%10 == 0 && i%20 != 0 && i != 0)
+		//if(i%4 == 0 && i%5 != 0 && i != 0)
 		{
 			add = rand()%LAST_LBA;
-			double write_time = initial_delay + (i*100);
-			result = ssd -> event_arrive(WRITE, add, 1, write_time);
-			if(write_time + result > experiment_end_time)
-				experiment_end_time = write_time + result;
+			result = ssd -> event_arrive(READ, add, 1, cur_time);
+			fprintf(log_file, "%.5lf\n", result);
+		}
+		if(i%20 == 0)
+		{
+			add = rand()%LAST_LBA;
+			result = ssd -> event_arrive(WRITE, add, 1, cur_time);
 		}
 	}
 
-	//fprintf(log_file, "%.5f %.5f\n", experiment_start_time, experiment_end_time);
 
 	delete ssd;
 	return 0;

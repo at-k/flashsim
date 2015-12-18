@@ -1,0 +1,11 @@
+These experiments were done using a closed model. 
+The file names are as follows:
+	read_<FTL_NUM>_<WRITE_ENABLED>_<SSD_UTIL>_<NUM_R/W_THREADS>.out
+	FTL_NUM is the FTL being used
+	WRITE_ENABLED is whether it is a read write workload or simply a read only workload
+	SSD_UTIL is the capacity of SSD filled up before starting the experiments
+	NUM_R/W_THREADS is the num of threads that do read (if write enabled, then an equal num of threads do writes)
+		This dictates the number of concurrent outstanding requests on the SSD at any point of time
+	The source for these experiments is make_test_queued.cpp
+
+	The data file contains the read latency percentile (generated from latencies.py scripts)

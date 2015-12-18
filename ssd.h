@@ -30,6 +30,7 @@
 #include <vector>
 #include <queue>
 #include <map>
+#include <time.h>
 #include <boost/multi_index_container.hpp>
 #include <boost/multi_index/identity.hpp>
 #include <boost/multi_index/ordered_index.hpp>
@@ -568,13 +569,13 @@ public:
 	ssd::uint get_num_valid(const Address &address) const;
 	ssd::uint get_num_invalid(const Address &address) const;
 	Block *get_block_pointer(const Address & address);
-	void unlock(double start_time, bool remove);
+	void unlock(double start_time, bool remove = false);
 	static bool timings_sorter(lock_times const& lhs, lock_times const& rhs);
 	std::vector<lock_times> timings;
 	const int PLANE_NOOP;
 private:
 	void update_wear_stats(void);
-	void serialize_access(double start_time, double duration, Event &event, bool remove);
+	void serialize_access(double start_time, double duration, Event &event, bool remove = false);
 	enum status get_next_page(void);
 	uint size;
 	Block * const data;
