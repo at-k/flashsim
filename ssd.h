@@ -246,11 +246,7 @@ class Wear_Leveler;
 class Block_manager;
 class FtlParent;
 class FtlImpl_Page;
-class FtlImpl_Bast;
 class FtlImpl_Fast;
-class FtlImpl_DftlParent;
-class FtlImpl_Dftl;
-class FtlImpl_BDftl;
 
 class Ram;
 class Controller;
@@ -802,32 +798,6 @@ private:
 	long *map;
 };
 
-class FtlImpl_Bast : public FtlParent
-{
-public:
-	FtlImpl_Bast(Controller &controller);
-	~FtlImpl_Bast();
-	enum status read(Event &event);
-	enum status write(Event &event);
-	enum status trim(Event &event);
-private:
-	std::map<long, LogPageBlock*> log_map;
-
-	long *data_list;
-
-	void dispose_logblock(LogPageBlock *logBlock, long lba);
-	void allocate_new_logblock(LogPageBlock *logBlock, long lba, Event &event);
-
-	bool is_sequential(LogPageBlock* logBlock, long lba, Event &event);
-	bool random_merge(LogPageBlock *logBlock, long lba, Event &event);
-
-	void update_map_block(Event &event);
-
-	void print_ftl_statistics();
-
-	int addressShift;
-	int addressSize;
-};
 
 class FtlImpl_Fast : public FtlParent
 {
@@ -867,147 +837,7 @@ private:
 };
 
 
-class FtlImpl_Fast_Improved : public FtlParent
-{
-public:
-	FtlImpl_Fast_Improved(Controller &controller);
-	~FtlImpl_Fast_Improved();
-	enum status read(Event &event);
-	enum status write(Event &event);
-	enum status trim(Event &event);
-private:
-	void initialize_log_pages();
 
-	std::map<long, LogPageBlock*> log_map;
-
-	long *data_list;
-	bool *pin_list;
-
-	enum status write_to_log_block(Event &event, long logicalBlockAddress, bool *issueEventRequired);
-
-	void switch_sequential(Event &event);
-	enum status merge_sequential(Event &event, bool issueWrite);
-	bool random_merge(LogPageBlock *logBlock, Event &event);
-
-	void update_map_block(Event &event);
-
-	void print_ftl_statistics();
-
-	long sequential_logicalblock_address;
-	Address sequential_address;
-	uint sequential_offset;
-
-	uint log_page_next;
-	LogPageBlock *log_pages;
-
-	int addressShift;
-	int addressSize;
-};
-
-class FtlImpl_DftlParent : public FtlParent
-{
-public:
-	FtlImpl_DftlParent(Controller &controller);
-	~FtlImpl_DftlParent();
-	virtual enum status read(Event &event) = 0;
-	virtual enum status write(Event &event) = 0;
-	virtual enum status trim(Event &event) = 0;
-protected:
-	struct MPage {
-		long vpn;
-		long ppn;
-		double create_ts;
-		double modified_ts;
-		bool cached;
-
-		MPage(long vpn);
-	};
-
-	long int cmt;
-
-	static double mpage_modified_ts_compare(const MPage& mpage);
-
-	typedef boost::multi_index_container<
-		FtlImpl_DftlParent::MPage,
-			boost::multi_index::indexed_by<
-		    // sort by MPage::operator<
-    			boost::multi_index::random_access<>,
-
-    			// Sort by modified ts
-    			boost::multi_index::ordered_non_unique<boost::multi_index::global_fun<const FtlImpl_DftlParent::MPage&,double,&FtlImpl_DftlParent::mpage_modified_ts_compare> >
-		  >
-		> trans_set;
-
-	typedef trans_set::nth_index<0>::type MpageByID;
-	typedef trans_set::nth_index<1>::type MpageByModified;
-
-	trans_set trans_map;
-	long *reverse_trans_map;
-
-	void consult_GTD(long dppn, Event &event);
-	void reset_MPage(FtlImpl_DftlParent::MPage &mpage);
-
-	void resolve_mapping(Event &event, bool isWrite);
-	void update_translation_map(FtlImpl_DftlParent::MPage &mpage, long ppn);
-
-	bool lookup_CMT(long dlpn, Event &event);
-
-	long get_free_data_page(Event &event);
-	long get_free_data_page(Event &event, bool insert_events);
-
-	void evict_page_from_cache(Event &event);
-	void evict_specific_page_from_cache(Event &event, long lba);
-
-	// Mapping information
-	int addressPerPage;
-	int addressSize;
-	uint totalCMTentries;
-
-	// Current storage
-	long currentDataPage;
-	long currentTranslationPage;
-};
-
-class FtlImpl_Dftl : public FtlImpl_DftlParent
-{
-public:
-	FtlImpl_Dftl(Controller &controller);
-	~FtlImpl_Dftl();
-	enum status read(Event &event);
-	enum status write(Event &event);
-	enum status trim(Event &event);
-	void cleanup_block(Event &event, Block *block);
-	void print_ftl_statistics();
-};
-
-class FtlImpl_BDftl : public FtlImpl_DftlParent
-{
-public:
-	FtlImpl_BDftl(Controller &controller);
-	~FtlImpl_BDftl();
-	enum status read(Event &event);
-	enum status write(Event &event);
-	enum status trim(Event &event);
-	void cleanup_block(Event &event, Block *block);
-private:
-	struct BPage {
-		uint pbn;
-		unsigned char nextPage;
-		bool optimal;
-
-		BPage();
-	};
-
-	BPage *block_map;
-	bool *trim_map;
-
-	std::queue<Block*> blockQueue;
-
-	Block* inuseBlock;
-	bool block_next_new();
-	long get_free_biftl_page(Event &event);
-	void print_ftl_statistics();
-};
 
 
 /* This is a basic implementation that only provides delay updates to events
@@ -1041,13 +871,8 @@ public:
 	enum status event_arrive(Event &event);
 	friend class FtlParent;
 	friend class FtlImpl_Page;
-	friend class FtlImpl_Bast;
 	friend class FtlImpl_Fast;
-	friend class FtlImpl_DftlParent;
-	friend class FtlImpl_Dftl;
-	friend class FtlImpl_BDftl;
 	friend class Block_manager;
-	friend class FtlImpl_Fast_Improved;
 
 	Stats stats;
 	void print_ftl_statistics();

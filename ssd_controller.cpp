@@ -46,20 +46,8 @@ Controller::Controller(Ssd &parent):
 	case 0:
 		ftl = new FtlImpl_Page(*this);
 		break;
-	case 1:
-		ftl = new FtlImpl_Bast(*this);
-		break;
 	case 2:
 		ftl = new FtlImpl_Fast(*this);
-		break;
-	case 3:
-		ftl = new FtlImpl_Dftl(*this);
-		break;
-	case 4:
-		ftl = new FtlImpl_BDftl(*this);
-		break;
-	case 5:
-		ftl = new FtlImpl_Fast_Improved(*this);
 		break;
 	}
 	return;
