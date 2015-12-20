@@ -50,7 +50,7 @@ int main(int argc, char **argv)
 	bool write_data;
 	unsigned int req_per_thread = 1000;
 	
-	unsigned int total_read_count = 20000, cur_read_count = 0;
+	unsigned int total_read_count = 10, cur_read_count = 0;
 
 	int read_loc = 0;
 	int write_loc = 0;
@@ -89,7 +89,9 @@ int main(int argc, char **argv)
 	unsigned int i=0;
 	for (i = 0; i < occupied; i++)
 	{
-		ssd -> event_arrive(WRITE, i, 1, (double) i*1000);
+		double result = ssd -> event_arrive(WRITE, i%lastLBA, 1, (double) i*1000);
+		if(result == -1)
+			return -1;
 		addresses.insert(i);
 	}
 	initial_delay = i*1000;
@@ -112,6 +114,7 @@ int main(int argc, char **argv)
 		count[i] = 0;
 	}	
 	unsigned int location = 0;
+	unsigned int write_count = 0;
 	for(unsigned int i=0;i<q_depth;i++)
 	{
 		double result;
@@ -120,7 +123,10 @@ int main(int argc, char **argv)
 			location = rand()%lastLBA;
 			//location = write_loc++;
 			result = ssd->event_arrive(WRITE, location, 1, (double) initial_delay);
+			if(result == -1)
+				return -1;
 			addresses.insert(location);
+			write_count++;
 		}	
 		else
 		{
@@ -132,6 +138,8 @@ int main(int argc, char **argv)
 			}
 			
 			result = ssd->event_arrive(READ, location, 1, (double) initial_delay);
+			if(result == -1)
+				return -1;
 			cur_read_count++;
 			fprintf(read_file, "%.5lf\t%.5lf\n", initial_delay, result);
 		}
@@ -179,7 +187,10 @@ int main(int argc, char **argv)
 			//location = write_loc++;
 			addresses.insert(location);
 			result = ssd->event_arrive(WRITE, location, 1, (double) next_request_time);
+			if(result == -1)
+				return -1;
 			count[position]++;
+			write_count++;
 		}	
 		else
 		{
@@ -191,12 +202,14 @@ int main(int argc, char **argv)
 			}
 			cur_read_count++;	
 			result = ssd->event_arrive(READ, location, 1, (double) next_request_time);
+			if(result == -1)	
+				return -1;
 			fprintf(read_file, "%.5lf\t%.5lf\n", next_request_time, result);
 			count[position]++;
 		}
 		response_times.insert(min_val_reference, next_request_time + result);
 		
-		if(cur_read_count > total_read_count)
+		if(cur_read_count >= total_read_count)
 		{
 			loop = false;
 			break;
@@ -215,7 +228,7 @@ int main(int argc, char **argv)
 		*/
 		
 	}
-	printf("experiment ended\n");
+	printf("experiment ended with write_count as %d\n", write_count);
 	delete ssd;
 	return 0;
 }

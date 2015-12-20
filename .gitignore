@@ -12,3 +12,4 @@ test2
 ufliptrace
 *.o
 *.kdev4
+.*

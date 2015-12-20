@@ -202,3 +202,14 @@ Address &Address::operator=(const Address &rhs)
 	real_address = rhs.real_address;
 	return *this;
 }
+
+bool Address::operator==(const Address &rhs)
+{
+  if(this == &rhs)
+    return true;
+  if((package == rhs.package) && (die == rhs.die) && (plane == rhs.plane) &&
+      (block == rhs.block) && (page == rhs.page) && (valid == rhs.valid)) {
+    return true;
+  }
+  return false;
+}

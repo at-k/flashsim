@@ -25,6 +25,7 @@
 #include "ssd.h"
 #include <time.h>
 #include <stdlib.h>
+#include <set>
 
 #define SIZE 130
 
@@ -36,6 +37,7 @@ int main()
 	print_config(NULL);
 	Ssd *ssd = new Ssd();
 
+	std::set<int> addresses;
 	double result;
 	srand(time(NULL));
 	
@@ -48,6 +50,7 @@ int main()
 	for (i = 0; i < NUM_PAGES; i++)
 	{
 		result = ssd -> event_arrive(WRITE, i%LAST_LBA, 1, (double) (350 * i));
+		addresses.insert(i);
 	}
 	printf("Experiment Starting\n");
 	double initial_delay = i * 350;
@@ -58,7 +61,11 @@ int main()
 		if(i%10 == 0 && i%20 != 0 && i != 0)
 		//if(i%4 == 0 && i%5 != 0 && i != 0)
 		{
-			add = rand()%LAST_LBA;
+			do
+			{
+				add = rand()%LAST_LBA;
+			}
+			while(addresses.find(add) == addresses.end());
 			result = ssd -> event_arrive(READ, add, 1, cur_time);
 			fprintf(log_file, "%.5lf\n", result);
 		}

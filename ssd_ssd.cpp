@@ -163,6 +163,7 @@ double Ssd::event_arrive(enum event_type type, ulong logical_address, uint size,
 	{
 		fprintf(stderr, "Ssd error: %s: request failed:\n", __func__);
 		event -> print(stderr);
+		return -1;
 	}
 
 	/* use start_time as a temporary for returning time taken to service event */

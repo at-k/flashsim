@@ -29,6 +29,7 @@
 #include <stdio.h>
 #include <vector>
 #include <queue>
+#include <list>
 #include <map>
 #include <time.h>
 #include <boost/multi_index_container.hpp>
@@ -122,6 +123,8 @@ extern const double PAGE_WRITE_DELAY;
 extern const uint PAGE_SIZE;
 extern const bool PAGE_ENABLE_DATA;
 
+
+extern const uint OVERPROVISIONING;
 /*
  * Mapping directory
  */
@@ -132,20 +135,11 @@ extern const uint MAP_DIRECTORY_SIZE;
  */
 extern const uint FTL_IMPLEMENTATION;
 
-/*
- * LOG page limit for BAST.
- */
-extern const uint BAST_LOG_PAGE_LIMIT;
 
 /*
  * LOG page limit for FAST.
  */
 extern const uint FAST_LOG_PAGE_LIMIT;
-
-/*
- * Number of blocks allowed to be in DFTL Cached Mapping Table.
- */
-extern const uint CACHE_DFTL_LIMIT;
 
 /*
  * Parallelism mode
@@ -282,6 +276,7 @@ public:
 	void operator+(uint);
 	Address &operator+=(const uint rhs);
 	Address &operator=(const Address &rhs);
+	bool operator==(const Address &rhs);
 
 	void set_linear_address(ulong address, enum address_valid valid);
 	void set_linear_address(ulong address);
@@ -783,6 +778,20 @@ protected:
 	Controller &controller;
 };
 
+struct logical_page
+{
+	Address physical_address;
+};
+
+struct ssd_block
+{
+  Address physical_address;
+  unsigned int last_write_time;
+  unsigned int valid_page_count;
+  unsigned int lifetime_left;
+  unsigned int *page_mapping;
+};
+
 class FtlImpl_Page : public FtlParent
 {
 public:
@@ -792,10 +801,24 @@ public:
 	enum status write(Event &event);
 	enum status trim(Event &event);
 private:
-	ulong currentPage;
-	ulong numPagesActive;
-	bool *trim_map;
-	long *map;
+	unsigned int latest_write_time;
+	struct logical_page *logical_page_list;
+	unsigned int RAW_SSD_PAGES, ADDRESSABLE_SSD_PAGES;
+	Address log_write_address;
+	std::list<struct ssd_block> free_block_list;
+	std::list<struct ssd_block> allocated_block_list;
+	unsigned int clean_threshold;
+	double get_average_age(struct ssd_block block);
+	Address translate_lba_pba(unsigned int lba);
+	unsigned int translate_pba_lba(Address pba);
+	unsigned int get_page_number_in_block(unsigned int lba);
+	unsigned int get_block_starting_lba(unsigned int lba);
+	unsigned int get_logical_block_num(unsigned int lba);
+	bool increment_log_write_address(Event &event);
+	bool allocate_new_block(bool for_cleaning, Event &event);
+	enum status garbage_collect(Event &event);
+	enum status wear_level(Event &event);
+	double age_variance_limit;
 };
 
 
