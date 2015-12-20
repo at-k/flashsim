@@ -6,6 +6,6 @@ The file names are as follows:
 	SSD_UTIL is the capacity of SSD filled up before starting the experiments
 	NUM_R/W_THREADS is the num of threads that do read (if write enabled, then an equal num of threads do writes)
 		This dictates the number of concurrent outstanding requests on the SSD at any point of time
-	The source for these experiments is make_test_queued.cpp
+	The source for these experiments is make_test_closed.cpp
 
 	The data file contains the read latency percentile (generated from latencies.py scripts)
