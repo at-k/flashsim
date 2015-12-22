@@ -57,7 +57,7 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller):FtlParent(controller)
 		if(next_block_lba == 0)
 			break;
 	}
-	clean_threshold = 10;
+	clean_threshold = SSD_SIZE * PACKAGE_SIZE * DIE_SIZE;
 	age_variance_limit = 1;	
 }
 
@@ -202,13 +202,18 @@ unsigned int FtlImpl_Page::get_logical_block_num(unsigned int lba)
 
 Address FtlImpl_Page::find_write_location(Address cur, bool *already_open)
 {
+	printf("called \n");
+			fflush(stdout);
 	Address ret_address;
 	ret_address.valid = NONE;
 	std::vector<std::list<struct ssd_block>::iterator>::iterator iter, min_queue_iter;
 	unsigned int min_queue_len = 0;
 	min_queue_iter = open_blocks.end();
+	printf("open blocks size is %u\n", open_blocks.size());
 	for(iter=open_blocks.begin();iter!=open_blocks.end();iter++)
 	{
+		printf("%p %p\n", iter, *iter);
+		fflush(stdout);
 		Address candidate_address = (*(*iter)).physical_address;
 		if (candidate_address.package == cur.package &&
 			candidate_address.die == cur.die &&
@@ -243,42 +248,46 @@ Address FtlImpl_Page::find_write_location(Address cur, bool *already_open)
 		ret_address = (*(*min_queue_iter)).physical_address;
 		*already_open = true;
 	}
-	std::list<struct ssd_block>::iterator free_iter, min_iter = free_block_list.end();
-	for(free_iter=free_block_list.begin();free_iter!=free_block_list.end();free_iter++)
+	unsigned int free_list_size = free_block_list.size();
+	if(free_list_size > clean_threshold)
 	{
-		Address candidate_address = (*free_iter).physical_address;
-		if (candidate_address.package == cur.package &&
-			candidate_address.die == cur.die &&
-			candidate_address.plane == cur.plane)
+		std::list<struct ssd_block>::iterator free_iter, min_iter = free_block_list.end();
+		for(free_iter=free_block_list.begin();free_iter!=free_block_list.end();free_iter++)
 		{
-			//
-		}
-		else
-		{
-			std::vector<struct ftl_event>::iterator event_iter;
-			unsigned int queue_count = 0;
-			for(event_iter=open_events.begin();event_iter!=open_events.end();event_iter++)
+			Address candidate_address = (*free_iter).physical_address;
+			if (candidate_address.package == cur.package &&
+				candidate_address.die == cur.die &&
+				candidate_address.plane == cur.plane)
 			{
-				Address conflict_address = (*event_iter).physical_address;
-				if (candidate_address.package == conflict_address.package &&
-					candidate_address.die == conflict_address.die &&
-					candidate_address.plane == conflict_address.plane &&
-					(*event_iter).priority == 1)
+				//
+			}
+			else
+			{
+				std::vector<struct ftl_event>::iterator event_iter;
+				unsigned int queue_count = 0;
+				for(event_iter=open_events.begin();event_iter!=open_events.end();event_iter++)
 				{
-							queue_count += 1;
+					Address conflict_address = (*event_iter).physical_address;
+					if (candidate_address.package == conflict_address.package &&
+						candidate_address.die == conflict_address.die &&
+						candidate_address.plane == conflict_address.plane &&
+						(*event_iter).priority == 1)
+					{
+								queue_count += 1;
+					}
+				}
+				if(queue_count < min_queue_len)
+				{
+					min_iter = free_iter;
+					min_queue_len = queue_count;
 				}
 			}
-			if(queue_count < min_queue_len || min_iter == free_block_list.end())
-			{
-				min_iter = free_iter;
-				min_queue_len = queue_count;
-			}
 		}
-	}
-	if(min_iter != free_block_list.end())
-	{
-		ret_address = (*min_iter).physical_address;
-		*already_open = false;
+		if(min_iter != free_block_list.end())
+		{
+			ret_address = (*min_iter).physical_address;
+			*already_open = false;
+		}
 	}
 	return ret_address;
 }
@@ -294,11 +303,15 @@ bool FtlImpl_Page::increment_log_write_address(Event &event)
 	Address next_write_address = find_write_location(log_write_address, &already_open);
 	if(next_write_address.valid == NONE)
 	{
+		printf("case 1\n");
+		fflush(stdout);
 		if(log_write_address.page < BLOCK_SIZE - 1)
 		{
 			log_write_address.page += 1;
 			return true;
 		}
+		printf("case 2\n");
+		fflush(stdout);
 		std::vector<std::list<struct ssd_block>::iterator>::iterator iter, target_iter = open_blocks.end();
 		for(iter=open_blocks.begin();iter!=open_blocks.end();iter++)
 		{
@@ -310,13 +323,16 @@ bool FtlImpl_Page::increment_log_write_address(Event &event)
 				break;
 			}		
 		}
-		open_blocks.erase(target_iter);
+		if(target_iter != open_blocks.end())
+			open_blocks.erase(target_iter);
 		return allocate_new_block(false, null_address, event);
 	}
 	else
 	{
 		if(already_open)
 		{
+			printf("case 3\n");
+			fflush(stdout);
 			log_write_address = next_write_address;
 			if(log_write_address.page < BLOCK_SIZE - 1)
 			{
@@ -334,11 +350,14 @@ bool FtlImpl_Page::increment_log_write_address(Event &event)
 					break;
 				}		
 			}
-			open_blocks.erase(target_iter);
+			if(target_iter != open_blocks.end())
+				open_blocks.erase(target_iter);
 			return allocate_new_block(false, null_address, event);
 		}
 		else
 		{
+			printf("case 4\n");
+			fflush(stdout);
 			return allocate_new_block(false, next_write_address, event);
 		}
 	}
@@ -364,6 +383,8 @@ bool FtlImpl_Page::allocate_new_block(bool for_cleaning, Address requested_addre
 			log_write_address.valid = PAGE;
 			std::list<struct ssd_block>::iterator last_iter = allocated_block_list.end();
 			--last_iter;
+			printf("case 1 pushing %p\n", last_iter);
+			fflush(stdout);
 			open_blocks.push_back(last_iter);
 			return true;
 		}
@@ -386,6 +407,8 @@ bool FtlImpl_Page::allocate_new_block(bool for_cleaning, Address requested_addre
 			log_write_address.valid = PAGE;
 			std::list<struct ssd_block>::iterator last_iter = allocated_block_list.end();
 			--last_iter;
+			printf("case 2 pushing %p\n", last_iter);
+			fflush(stdout);
 			open_blocks.push_back(last_iter);
 			return true;
 		}
@@ -400,6 +423,8 @@ bool FtlImpl_Page::allocate_new_block(bool for_cleaning, Address requested_addre
 		log_write_address.valid = PAGE;
 		std::list<struct ssd_block>::iterator last_iter = allocated_block_list.end();
 		--last_iter;
+		printf("case 3 pushing %p\n", last_iter);
+			fflush(stdout);
 		open_blocks.push_back(last_iter);
 		return true;
 	}
@@ -427,7 +452,7 @@ void FtlImpl_Page::add_event(Event event, int priority)
 	new_event.physical_address = event.get_address();
 	new_event.start_time = event.get_start_time();
 	new_event.end_time = event.get_total_time();
-	new_event.priority = 1;
+	new_event.priority = priority;
 	if(new_event.priority == 1)
 	{
 		std::vector<struct ftl_event>::iterator iter;
@@ -440,6 +465,7 @@ void FtlImpl_Page::add_event(Event event, int priority)
 		}
 	}
 	printf("Length of list %d\n", open_events.size());
+			fflush(stdout);
 	open_events.push_back(new_event);
 }
 
@@ -498,6 +524,7 @@ enum status FtlImpl_Page::write(Event &event)
 	controller.stats.numFTLWrite++;
 	enum status ret_status = controller.issue(event, true);
 	add_event(event, 1);
+	printf("====\n");
 	return ret_status;
 }
 

@@ -46,7 +46,17 @@ int main()
 	int LAST_LBA = NUMBER_OF_ADDRESSABLE_BLOCKS * BLOCK_SIZE;
 
 	int i = 0;
-	int NUM_PAGES = 0.9 * LAST_LBA;
+	int NUM_PAGES = LAST_LBA;
+
+	
+	for(i=0;i<NUM_PAGES;i++)
+	{
+		result = ssd->event_arrive(WRITE, 0, 1, (double)(350 * i));
+	}
+
+	return 0;
+
+	/*
 	for (i = 0; i < NUM_PAGES; i++)
 	{
 		result = ssd -> event_arrive(WRITE, i%LAST_LBA, 1, (double) (350 * i));
@@ -75,8 +85,7 @@ int main()
 			result = ssd -> event_arrive(WRITE, add, 1, cur_time);
 		}
 	}
-
-
+*/
 	delete ssd;
 	return 0;
 }
