@@ -790,6 +790,7 @@ struct ssd_block
   unsigned int valid_page_count;
   unsigned int lifetime_left;
   unsigned int *page_mapping;
+  unsigned int last_page_written;
 };
 
 struct ftl_event
@@ -817,7 +818,6 @@ private:
 	Address log_write_address;
 	std::list<struct ssd_block> free_block_list;
 	std::list<struct ssd_block> allocated_block_list;
-	std::vector<std::list<struct ssd_block>::iterator> open_blocks;
 	std::vector<struct ftl_event> open_events;
 	unsigned int clean_threshold;
 	double get_average_age(struct ssd_block block);

@@ -98,6 +98,7 @@ enum status Controller::issue(Event &event_list, bool remove)
 				|| ssd.replace(*cur) == FAILURE)
 				return FAILURE;
 			printf("%f\n", cur->get_total_time());
+			fflush(stdout);
 		}
 		else if(cur -> get_event_type() == WRITE)
 		{
@@ -111,6 +112,7 @@ enum status Controller::issue(Event &event_list, bool remove)
 				|| ssd.replace(*cur) == FAILURE)
 				return FAILURE;
 			printf("%f\n", cur->get_total_time());
+			fflush(stdout);
 		}
 		else if(cur -> get_event_type() == ERASE)
 		{
@@ -121,6 +123,7 @@ enum status Controller::issue(Event &event_list, bool remove)
 				|| ssd.erase(*cur, remove) == FAILURE)
 				return FAILURE;
 			printf("%f\n", cur->get_total_time());
+			fflush(stdout);
 		}
 		else if(cur -> get_event_type() == MERGE)
 		{

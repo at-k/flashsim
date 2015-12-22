@@ -52,6 +52,7 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller):FtlParent(controller)
 		new_ssd_block.page_mapping = (unsigned int *)malloc(BLOCK_SIZE * sizeof(unsigned int));
 		for(unsigned int i=0;i<BLOCK_SIZE;i++)
 			new_ssd_block.page_mapping[i] = 0;
+		new_ssd_block.last_page_written = 0;
 		free_block_list.push_back(new_ssd_block);
 		next_block_lba = get_next_block_lba(next_block_lba);
 		if(next_block_lba == 0)
@@ -202,19 +203,18 @@ unsigned int FtlImpl_Page::get_logical_block_num(unsigned int lba)
 
 Address FtlImpl_Page::find_write_location(Address cur, bool *already_open)
 {
-	printf("called \n");
-			fflush(stdout);
 	Address ret_address;
 	ret_address.valid = NONE;
-	std::vector<std::list<struct ssd_block>::iterator>::iterator iter, min_queue_iter;
+
+	std::list<struct ssd_block>::iterator iter, min_queue_iter;
 	unsigned int min_queue_len = 0;
-	min_queue_iter = open_blocks.end();
-	printf("open blocks size is %u\n", open_blocks.size());
-	for(iter=open_blocks.begin();iter!=open_blocks.end();iter++)
+	min_queue_iter = allocated_block_list.end();
+	bool found_block = false;
+	for(iter=allocated_block_list.begin();iter!=allocated_block_list.end();iter++)
 	{
-		printf("%p %p\n", iter, *iter);
-		fflush(stdout);
-		Address candidate_address = (*(*iter)).physical_address;
+		if((*iter).last_page_written == BLOCK_SIZE - 1)
+			continue;
+		Address candidate_address = (*iter).physical_address;
 		if (candidate_address.package == cur.package &&
 			candidate_address.die == cur.die &&
 			candidate_address.plane == cur.plane)
@@ -236,17 +236,21 @@ Address FtlImpl_Page::find_write_location(Address cur, bool *already_open)
 							queue_count += 1;
 				}
 			}
-			if(queue_count < min_queue_len || min_queue_iter == open_blocks.end())
+			if(queue_count < min_queue_len || !found_block)
 			{
 				min_queue_iter = iter;
 				min_queue_len = queue_count;
+				found_block = true;
 			}
 		}
 	}
-	if(min_queue_iter != open_blocks.end())
+	if(min_queue_iter != allocated_block_list.end())
 	{
-		ret_address = (*(*min_queue_iter)).physical_address;
+		ret_address = (*min_queue_iter).physical_address;
+		ret_address.page = (*min_queue_iter).last_page_written;
+		ret_address.valid = PAGE;
 		*already_open = true;
+		fflush(stdout);
 	}
 	unsigned int free_list_size = free_block_list.size();
 	if(free_list_size > clean_threshold)
@@ -276,19 +280,23 @@ Address FtlImpl_Page::find_write_location(Address cur, bool *already_open)
 								queue_count += 1;
 					}
 				}
-				if(queue_count < min_queue_len)
+				if(queue_count < min_queue_len || !found_block)
 				{
 					min_iter = free_iter;
 					min_queue_len = queue_count;
+					found_block = true;
 				}
 			}
 		}
 		if(min_iter != free_block_list.end())
 		{
 			ret_address = (*min_iter).physical_address;
+			ret_address.page = (*min_iter).last_page_written;
+			ret_address.valid = PAGE;
 			*already_open = false;
 		}
 	}
+	fflush(stdout);
 	return ret_address;
 }
 
@@ -303,61 +311,34 @@ bool FtlImpl_Page::increment_log_write_address(Event &event)
 	Address next_write_address = find_write_location(log_write_address, &already_open);
 	if(next_write_address.valid == NONE)
 	{
-		printf("case 1\n");
 		fflush(stdout);
 		if(log_write_address.page < BLOCK_SIZE - 1)
 		{
 			log_write_address.page += 1;
 			return true;
 		}
-		printf("case 2\n");
 		fflush(stdout);
-		std::vector<std::list<struct ssd_block>::iterator>::iterator iter, target_iter = open_blocks.end();
-		for(iter=open_blocks.begin();iter!=open_blocks.end();iter++)
-		{
-			(*(*iter)).physical_address.valid = PAGE;
-			(*(*iter)).physical_address.page = log_write_address.page;
-			if((*(*iter)).physical_address == log_write_address)
-			{
-				target_iter = iter;
-				break;
-			}		
-		}
-		if(target_iter != open_blocks.end())
-			open_blocks.erase(target_iter);
 		return allocate_new_block(false, null_address, event);
 	}
 	else
 	{
 		if(already_open)
 		{
-			printf("case 3\n");
 			fflush(stdout);
 			log_write_address = next_write_address;
 			if(log_write_address.page < BLOCK_SIZE - 1)
 			{
+				fflush(stdout);
 				log_write_address.page += 1;
 				return true;
 			}
-			std::vector<std::list<struct ssd_block>::iterator>::iterator iter, target_iter = open_blocks.end();
-			for(iter=open_blocks.begin();iter!=open_blocks.end();iter++)
-			{
-				(*(*iter)).physical_address.valid = PAGE;
-				(*(*iter)).physical_address.page = log_write_address.page;
-				if((*(*iter)).physical_address == log_write_address)
-				{
-					target_iter = iter;
-					break;
-				}		
-			}
-			if(target_iter != open_blocks.end())
-				open_blocks.erase(target_iter);
 			return allocate_new_block(false, null_address, event);
 		}
 		else
 		{
-			printf("case 4\n");
 			fflush(stdout);
+			next_write_address.page = 0;
+			next_write_address.valid = BLOCK;
 			return allocate_new_block(false, next_write_address, event);
 		}
 	}
@@ -368,7 +349,6 @@ bool FtlImpl_Page::allocate_new_block(bool for_cleaning, Address requested_addre
 	unsigned int free_list_size = free_block_list.size();
 	if(free_list_size == 0)
 	{
-		//(log_file, "returning failure because no free blocks are available\n");
 		return false;
 	}  
 	if(free_list_size > clean_threshold)
@@ -381,11 +361,6 @@ bool FtlImpl_Page::allocate_new_block(bool for_cleaning, Address requested_addre
 			log_write_address = allocated_block_list.back().physical_address;
 			log_write_address.page = 0;
 			log_write_address.valid = PAGE;
-			std::list<struct ssd_block>::iterator last_iter = allocated_block_list.end();
-			--last_iter;
-			printf("case 1 pushing %p\n", last_iter);
-			fflush(stdout);
-			open_blocks.push_back(last_iter);
 			return true;
 		}
 		else
@@ -405,11 +380,6 @@ bool FtlImpl_Page::allocate_new_block(bool for_cleaning, Address requested_addre
 			log_write_address = allocated_block_list.back().physical_address;
 			log_write_address.page = 0;
 			log_write_address.valid = PAGE;
-			std::list<struct ssd_block>::iterator last_iter = allocated_block_list.end();
-			--last_iter;
-			printf("case 2 pushing %p\n", last_iter);
-			fflush(stdout);
-			open_blocks.push_back(last_iter);
 			return true;
 		}
 	}
@@ -421,23 +391,15 @@ bool FtlImpl_Page::allocate_new_block(bool for_cleaning, Address requested_addre
 		log_write_address = allocated_block_list.back().physical_address;
 		log_write_address.page = 0;
 		log_write_address.valid = PAGE;
-		std::list<struct ssd_block>::iterator last_iter = allocated_block_list.end();
-		--last_iter;
-		printf("case 3 pushing %p\n", last_iter);
-			fflush(stdout);
-		open_blocks.push_back(last_iter);
 		return true;
 	}
 	else
 	{
 		//do cleaning and wear levelling
-		//printf("need to erase some block\n");
-		//Event garbage_collect_event(ERASE, cur_write_lba, 1, event.get_total_time());
 		if(garbage_collect(event) == SUCCESS)
 			return true;
 		else
 		{
-			//(log_file, "returning failure from allocate\n");
 			return false;
 		}
 
@@ -464,8 +426,6 @@ void FtlImpl_Page::add_event(Event event, int priority)
 				iter++;
 		}
 	}
-	printf("Length of list %d\n", open_events.size());
-			fflush(stdout);
 	open_events.push_back(new_event);
 }
 
@@ -499,11 +459,13 @@ enum status FtlImpl_Page::write(Event &event)
 	unsigned int logical_page_num = event.get_logical_address();
 	if(!increment_log_write_address(event))
 	{
-		//fprintf(log_file, "should return failure from write\n");
 		return FAILURE; 
 	}  
-	std::list<struct ssd_block>::iterator iter;
+	std::list<struct ssd_block>::iterator iter, log_write_iter = allocated_block_list.end();
 	Address currently_mapped_address = logical_page_list[logical_page_num].physical_address;
+	Address log_write_block_address = log_write_address;
+	log_write_block_address.page = 0;
+	log_write_block_address.valid = BLOCK;
 	if(currently_mapped_address.valid == PAGE)
 	{
 		currently_mapped_address.page = 0;
@@ -517,9 +479,18 @@ enum status FtlImpl_Page::write(Event &event)
 		}
 	}
 	logical_page_list[logical_page_num].physical_address = log_write_address;
-	allocated_block_list.back().last_write_time = latest_write_time++;    
-	allocated_block_list.back().valid_page_count += 1;
-	allocated_block_list.back().page_mapping[log_write_address.page] = logical_page_num;  
+
+	for(iter= allocated_block_list.begin();iter!=allocated_block_list.end();iter++)
+	{
+		if(iter->physical_address == log_write_block_address)
+		{
+			log_write_iter = iter;
+		}
+	}
+	(*log_write_iter).last_write_time = latest_write_time++;    
+	(*log_write_iter).valid_page_count += 1;
+	(*log_write_iter).page_mapping[log_write_address.page] = logical_page_num;  
+	(*log_write_iter).last_page_written = log_write_address.page;
 	event.set_address(logical_page_list[logical_page_num].physical_address);
 	controller.stats.numFTLWrite++;
 	enum status ret_status = controller.issue(event, true);
@@ -536,7 +507,6 @@ enum status FtlImpl_Page::trim(Event &event)
 
 enum status FtlImpl_Page::garbage_collect(Event &event)
 {
-	//printf("collecting garbage\n");
 	if(free_block_list.size() == 0)
 	{
 		printf("garbage collector returned FAILURE \n");
@@ -586,6 +556,7 @@ enum status FtlImpl_Page::garbage_collect(Event &event)
 	}
 	if(!cleaning_possible)
 	{
+		printf("cleaning is not possible\n");
 		return FAILURE;
 		//return wear_level(event);
 	} 
@@ -622,14 +593,11 @@ enum status FtlImpl_Page::garbage_collect(Event &event)
 	block_to_clean.valid_page_count = 0;
 	Event erase_event(ERASE, translate_pba_lba(block_to_clean.physical_address), 1, event.get_total_time());
 	erase_event.set_address(block_to_clean.physical_address);
-	//printf("issuing an erase!!!\n");
 	controller.issue(erase_event);
 	add_event(erase_event, 0);
 	event.incr_time_taken(erase_event.get_time_taken());
 	block_to_clean.lifetime_left -= 1;
 	cleaning_block->last_write_time = block_to_clean.last_write_time;
-	if(max_benefit_block_reference == allocated_block_list.end())
-		printf("This was causing the problem\n");
 	allocated_block_list.erase(max_benefit_block_reference);
 	free_block_list.push_back(block_to_clean);  
 	allocated_block_list.push_back(*cleaning_block);
@@ -642,7 +610,6 @@ enum status FtlImpl_Page::garbage_collect(Event &event)
 
 enum status FtlImpl_Page::wear_level(Event &event)
 {
-	//printf("wear leveller called\n\n");
 	std::list<struct ssd_block>::iterator iter, healthiest_block_reference, wear_block_reference;
 	unsigned int max_lifetime_left = 0;
 	double max_benefit = 0;
@@ -671,13 +638,11 @@ enum status FtlImpl_Page::wear_level(Event &event)
 	if(free_block_list.size() == 0 || !cleaning_possible)
 		return FAILURE;
 
-	//fprintf(log_file, "THe block to clean chosen for cleaning has %d erases left\n", wear_block_reference->lifetime_left);
 
 	struct ssd_block *cleaning_block = &(free_block_list.front());
 	unsigned int page_pointer = 0;
 	cleaning_block->valid_page_count += wear_block_reference->valid_page_count;
 	Address cur_page_address = wear_block_reference->physical_address;
-	//printf("copying from clock to cean to the cleaning block\n");
 	for(unsigned int i=0;i<BLOCK_SIZE;i++)
 	{
 		cur_page_address.page = i;
@@ -710,7 +675,6 @@ enum status FtlImpl_Page::wear_level(Event &event)
 	add_event(erase_event, 0);
 	event.incr_time_taken(erase_event.get_time_taken());
 	wear_block_reference->lifetime_left -= 1;
-	//fprintf(log_file, "Comparing %d with %d\n", wear_block_reference->lifetime_left, wear_block_reference->lifetime_left);
 	cleaning_block->last_write_time = wear_block_reference->last_write_time;
 	log_write_address = cleaning_block->physical_address;
 	log_write_address.page = page_pointer;
@@ -720,7 +684,6 @@ enum status FtlImpl_Page::wear_level(Event &event)
 	page_pointer = 0;
 	wear_block_reference->valid_page_count += block_to_copy.valid_page_count;
 	cur_page_address = block_to_copy.physical_address;
-	//printf("copying from block to copy to block to clean\n");
 	for(unsigned int i=0;i<BLOCK_SIZE;i++)
 	{
 		cur_page_address.page = i;
@@ -745,7 +708,6 @@ enum status FtlImpl_Page::wear_level(Event &event)
 			page_pointer += 1;
 		}
 	}
-	//printf("wear levelling done\n");
 	block_to_copy.valid_page_count = 0;
 	Event copy_event(ERASE, translate_pba_lba(block_to_copy.physical_address), 1, event.get_total_time());
 	copy_event.set_address(block_to_copy.physical_address);
