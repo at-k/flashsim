@@ -143,8 +143,7 @@ double Event::get_time_taken(void) const
 
 double Event::get_total_time(void) const
 {
-	assert(time_taken >= 0.0);
-	return time_taken + start_time;
+	return (time_taken + start_time);
 }
 
 double Event::get_bus_wait_time(void) const
@@ -226,7 +225,10 @@ void Event::print(FILE *stream)
 	else if(type == MERGE)
 		fprintf(stream, "Merge");
 	else
+	{
+		printf("Error type is %d\n", type);
 		fprintf(stream, "Unknown event type: ");
+	}
 	address.print(stream);
 	if(type == MERGE)
 		merge_address.print(stream);

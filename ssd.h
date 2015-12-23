@@ -819,7 +819,7 @@ public:
 private:
 	unsigned int latest_write_time;
 	struct logical_page *logical_page_list;
-	unsigned int RAW_SSD_PAGES, ADDRESSABLE_SSD_PAGES;
+	unsigned int RAW_SSD_BLOCKS, ADDRESSABLE_SSD_PAGES;
 	Address log_write_address;
 	std::list<struct ssd_block> free_block_list;
 	std::list<struct ssd_block> allocated_block_list;
@@ -838,8 +838,7 @@ private:
 	bool allocate_new_block(Address requested_address, Event &event);
 	unsigned int get_next_block_lba(unsigned int lba);
 	Address get_next_block_pba(Address pba);
-	enum status garbage_collect(Event &event);
-	//enum status wear_level(Event &event);
+	enum status garbage_collect(double start_time);
 	double age_variance_limit;
 	void add_event(Event event);
 	void add_background_event(struct ftl_event event);

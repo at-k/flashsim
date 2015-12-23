@@ -29,9 +29,8 @@ using namespace ssd;
 
 FtlImpl_Page::FtlImpl_Page(Controller &controller):FtlParent(controller)
 {
-	RAW_SSD_PAGES = SSD_SIZE*PACKAGE_SIZE*DIE_SIZE*PLANE_SIZE*BLOCK_SIZE; 
-	ADDRESSABLE_SSD_PAGES = int( ( 1- ( float)OVERPROVISIONING/100.0)*RAW_SSD_PAGES); 
-	unsigned int RAW_SSD_BLOCKS = RAW_SSD_PAGES/BLOCK_SIZE;
+	RAW_SSD_BLOCKS = SSD_SIZE*PACKAGE_SIZE*DIE_SIZE*PLANE_SIZE; 
+	ADDRESSABLE_SSD_PAGES = NUMBER_OF_ADDRESSABLE_BLOCKS * BLOCK_SIZE; 
 	logical_page_list = (struct logical_page *)malloc(ADDRESSABLE_SSD_PAGES * sizeof (struct logical_page));
 	for (unsigned int i=0;i<ADDRESSABLE_SSD_PAGES;i++)
 	{
@@ -39,7 +38,6 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller):FtlParent(controller)
 	}
 	log_write_address.valid = NONE;
 
-	printf("Raw SSD Blocks = %d\n", RAW_SSD_BLOCKS);
 	unsigned int next_block_lba = 0;
 	for(unsigned int i=0;i<RAW_SSD_BLOCKS;i++)
 	{
@@ -212,9 +210,6 @@ Address FtlImpl_Page::find_write_location(Address cur, bool *already_open)
 	bool found_block = false;
 	for(iter=allocated_block_list.begin();iter!=allocated_block_list.end();iter++)
 	{
-		printf("considering ");
-		(*iter).physical_address.print();
-		printf(" with last written as %d\n", (*iter).last_page_written);
 		if((*iter).last_page_written == BLOCK_SIZE - 1)
 			continue;
 		Address candidate_address = (*iter).physical_address;
@@ -253,8 +248,6 @@ Address FtlImpl_Page::find_write_location(Address cur, bool *already_open)
 		ret_address.page = (*min_queue_iter).last_page_written;
 		ret_address.valid = PAGE;
 		*already_open = true;
-		printf("set the last page written as %d\n", ret_address.page);
-		fflush(stdout);
 	}
 	unsigned int free_list_size = free_block_list.size();
 	if(free_list_size > clean_threshold)
@@ -315,39 +308,28 @@ bool FtlImpl_Page::increment_log_write_address(Event &event)
 	Address next_write_address = find_write_location(log_write_address, &already_open);
 	if(next_write_address.valid == NONE)
 	{
-		printf("case 1\n");
-		fflush(stdout);
 		if(log_write_address.page < BLOCK_SIZE - 1)
 		{
 			log_write_address.page += 1;
 			return true;
 		}
-		printf("case 2\n");
-		fflush(stdout);
+		printf("size of write 11 on input is %d\n", event.get_size());
 		return allocate_new_block(null_address, event);
 	}
 	else
 	{
 		if(already_open)
 		{
-			printf("case 3\n");
-			fflush(stdout);
 			log_write_address = next_write_address;
 			if(log_write_address.page < BLOCK_SIZE - 1)
 			{
-				printf("case 3.1\n");
-				fflush(stdout);
 				log_write_address.page += 1;
 				return true;
 			}
-			printf("case 3.4\n");
-			fflush(stdout);
 			return allocate_new_block(null_address, event);
 		}
 		else
 		{
-			printf("case 4\n");
-			fflush(stdout);
 			next_write_address.page = 0;
 			next_write_address.valid = BLOCK;
 			return allocate_new_block(next_write_address, event);
@@ -395,8 +377,15 @@ bool FtlImpl_Page::allocate_new_block(Address requested_address, Event &event)
 	if(free_list_size < clean_threshold)
 	{
 		//do cleaning and wear levelling
-		if(garbage_collect(event) != SUCCESS)
+	printf("size of write 111 on input is %d\n", event.get_size());
+		double start_time = event.get_total_time();
+	printf("size of write 000 on input is %d\n", event.get_size());
+		if(garbage_collect(start_time) != SUCCESS)
+		{
+			printf("GC failed\n");
 			ret_val = false;
+		}
+	printf("size of write 222 on input is %d\n", event.get_size());
 	}
 	return ret_val;
 }
@@ -453,11 +442,13 @@ enum status FtlImpl_Page::read(Event &event)
 
 enum status FtlImpl_Page::write(Event &event)
 {
+	printf("size of write on input is %d\n", event.get_size());
 	unsigned int logical_page_num = event.get_logical_address();
 	if(!increment_log_write_address(event))
 	{
 		return FAILURE; 
 	}  
+	printf("size of write 1 on input is %d\n===\n", event.get_size());
 	std::list<struct ssd_block>::iterator iter, log_write_iter = allocated_block_list.end();
 	Address currently_mapped_address = logical_page_list[logical_page_num].physical_address;
 	Address log_write_block_address = log_write_address;
@@ -488,15 +479,9 @@ enum status FtlImpl_Page::write(Event &event)
 	(*log_write_iter).valid_page_count += 1;
 	(*log_write_iter).page_mapping[log_write_address.page] = logical_page_num;  
 	(*log_write_iter).last_page_written = log_write_address.page;
-	printf("Set last page written for ");
-	(*log_write_iter).physical_address.print();
-	printf(" as %d\n", log_write_address.page);
 	process_background_tasks(event);
 	event.set_address(logical_page_list[logical_page_num].physical_address);
 	controller.stats.numFTLWrite++;
-	printf("Issuing write to ");
-	log_write_address.print();
-	printf("\n");
 	fflush(stdout);
 	enum status ret_status = controller.issue(event, true);
 	add_event(event);
@@ -509,9 +494,8 @@ enum status FtlImpl_Page::trim(Event &event)
 	return SUCCESS;
 }
 
-enum status FtlImpl_Page::garbage_collect(Event &event)
+enum status FtlImpl_Page::garbage_collect(double start_time)
 {
-	printf("GC called with start time %f\n", event.get_total_time());
 	if(free_block_list.size() == 0)
 	{
 		printf("garbage collector returned FAILURE \n");
@@ -537,7 +521,7 @@ enum status FtlImpl_Page::garbage_collect(Event &event)
 		if(iter->lifetime_left > max_lifetime_left || max_lifetime_left == -1)
 			max_lifetime_left = iter->lifetime_left;
 	}
-	average_lifetime_left = average_lifetime_left/(double)(RAW_SSD_PAGES/BLOCK_SIZE);
+	average_lifetime_left = average_lifetime_left/(double)(RAW_SSD_BLOCKS);
 	for(iter=allocated_block_list.begin();iter!=allocated_block_list.end();iter++)
 	{
 		float utilization = (float)iter->valid_page_count/(float)BLOCK_SIZE;
@@ -570,13 +554,6 @@ enum status FtlImpl_Page::garbage_collect(Event &event)
 	unsigned int page_pointer = 0;
 	Address cur_page_address = block_to_clean.physical_address;
 	bool clean_pages_found = false;
-	printf("block to clean is ");
-	block_to_clean.physical_address.print();
-	printf("\n");
-	printf("cleaning block is ");
-	cleaning_block->physical_address.print();
-	printf("\n");
-	fflush(stdout);
 	for(unsigned int i=0;i<BLOCK_SIZE;i++)
 	{
 		cur_page_address.page = i;
@@ -587,7 +564,7 @@ enum status FtlImpl_Page::garbage_collect(Event &event)
 			bg_read.type = READ;
 			bg_read.physical_address = cur_page_address;
 			bg_read.logical_address = block_to_clean.page_mapping[i];
-			bg_read.start_time = event.get_total_time();
+			bg_read.start_time = start_time;
 			bg_read.end_time = 0;
 			add_background_event(bg_read);
 			struct ftl_event bg_write;
@@ -610,7 +587,7 @@ enum status FtlImpl_Page::garbage_collect(Event &event)
 	if(clean_pages_found)
 		bg_erase.start_time = 0;
 	else
-		bg_erase.start_time = event.get_total_time();
+		bg_erase.start_time = start_time;
 	bg_erase.end_time = 0;
 
 	add_background_event(bg_erase);
@@ -619,10 +596,6 @@ enum status FtlImpl_Page::garbage_collect(Event &event)
 	new_cleaning_blocks.block_to_clean = block_to_clean;
 	new_cleaning_blocks.cleaning_block = *cleaning_block;
 	
-	printf("added ");
-	new_cleaning_blocks.cleaning_block.physical_address.print();
-	printf("to the vector\n");
-	fflush(stdout);
 	allocated_block_list.erase(max_benefit_block_reference);
 	free_block_list.pop_front();
 	bg_cleaning_blocks.push_back(new_cleaning_blocks);
@@ -638,7 +611,6 @@ void FtlImpl_Page::process_background_tasks(Event event)
 		return;
 	while(background_events.size() > 0 && background_events.front().start_time <= cur_simulated_time)
 	{
-		printf("looping with %f\n", background_events.front().start_time);
 		struct ftl_event first_event = background_events.front();
 		Address candidate_address = first_event.physical_address;
 		std::vector<struct ftl_event>::iterator iter;
@@ -660,9 +632,19 @@ void FtlImpl_Page::process_background_tasks(Event event)
 		{
 			Event bg_task(first_event.type, first_event.logical_address, 1, first_event.start_time);
 			bg_task.set_address(first_event.physical_address);
+			printf("type ");
+			if(first_event.type == READ)
+				printf("READ");
+			else if(first_event.type == WRITE)
+				printf("WRITE");
+			else if(first_event.type == ERASE)
+				printf("ERASE");
+			else
+				printf("ERRRRRRRROR");
+			printf(", log add %d\n", first_event.logical_address);
+			fflush(stdout);
 			controller.issue(bg_task);
 			double task_time = bg_task.get_time_taken();
-			printf("task time %f\n", task_time);
 			if(first_event.type == WRITE)
 			{
 				logical_page_list[first_event.logical_address].physical_address = first_event.physical_address;
@@ -681,10 +663,6 @@ void FtlImpl_Page::process_background_tasks(Event event)
 				cleaning_block.last_write_time = block_to_clean.last_write_time;
 				free_block_list.push_back(block_to_clean);
 				allocated_block_list.push_back(cleaning_block);
-				printf("pushed the block with address ");
-				cleaning_block.physical_address.print();
-				printf("\n");
-				fflush(stdout);
 				bg_cleaning_blocks.erase(bg_cleaning_blocks.begin());
 			}
 			background_events.erase(background_events.begin());
