@@ -838,7 +838,7 @@ private:
 	bool allocate_new_block(Address requested_address, Event &event);
 	unsigned int get_next_block_lba(unsigned int lba);
 	Address get_next_block_pba(Address pba);
-	enum status garbage_collect(double start_time);
+	enum status garbage_collect(Event &event);
 	double age_variance_limit;
 	void add_event(Event event);
 	void add_background_event(struct ftl_event event);

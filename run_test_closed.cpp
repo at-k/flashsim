@@ -106,6 +106,7 @@ int main(int argc, char **argv)
 		q_depth = 2*q_depth;
 	}
 
+	printf("starting experiment\n");
 
 	std::vector<double> response_times;
 	unsigned int count[q_depth];
@@ -121,7 +122,7 @@ int main(int argc, char **argv)
 		if(write_data && i >= q_depth/2)
 		{
 			location = rand()%lastLBA;
-			//location = write_loc++;
+			//location = (write_loc+1)%lastLBA;	
 			result = ssd->event_arrive(WRITE, location, 1, (double) initial_delay);
 			if(result == -1)
 				return -1;
@@ -159,7 +160,6 @@ int main(int argc, char **argv)
 	*/
 	bool loop = true;
 
-	printf("startign experiment\n");
 	while(loop)
 	{
 		std::vector<double>::iterator iter, min_val_reference = response_times.end();
@@ -184,7 +184,7 @@ int main(int argc, char **argv)
 		if(write_data && position >= q_depth/2)
 		{
 			location = rand()%lastLBA;
-			//location = write_loc++;
+			//location = (write_loc+1)%lastLBA;
 			addresses.insert(location);
 			result = ssd->event_arrive(WRITE, location, 1, (double) next_request_time);
 			if(result == -1)

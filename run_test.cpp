@@ -50,9 +50,24 @@ int main()
 
 	
 	printf("NUM PAGES %d\n", NUM_PAGES);
-	for(i=0;i<NUM_PAGES;i++)
+	for(i=0;i<2*NUM_PAGES;i++)
 	{
-		result = ssd->event_arrive(WRITE, 0, 1, (double)(350 * i));
+		int write_address = i%LAST_LBA;
+		if(i==NUM_PAGES)
+		{
+			printf("One round done\n");
+		}
+		if(i > NUM_PAGES)
+		{
+			write_address = 7;
+		}
+		printf("writing %d\n", write_address);
+		result = ssd->event_arrive(WRITE, write_address, 1, (double)(350 * i));
+		if(result == -1)
+		{
+			printf("wrote %d\n", i);
+			break;
+		}
 		//result = ssd->event_arrive(WRITE, 0, 1, 0);
 	}
 

@@ -68,7 +68,10 @@ Channel::Channel(double ctrl_delay, double data_delay, uint table_size, uint max
 		data_delay = 0.0;
 	}
 
-	//timings.reserve(4096);
+	timings.reserve(PACKAGE_SIZE * DIE_SIZE);
+
+	printf("[Constructor] The size for bus is %d\n", timings.size());
+	fflush(stdout);
 
 	ready_at = -1;
 }
@@ -145,18 +148,22 @@ enum status Channel::lock(double start_time, double duration, Event &event, bool
 
 	lock_times lt;
 	
-	std::vector<lock_times>::iterator it, insert_location, first, last;
+	std::vector<lock_times>::iterator it, insert_location = timings.end(), first, last;
 
-	//printf("The size for bus is %d\n", timings.size());
 
 	if(remove)
 	{
 		for(it=timings.begin();it!=timings.end();)
 		{
+			//printf("iterator address %p %f %f\n", it, (*it).lock_time, (*it).unlock_time);
+			//fflush(stdout);
+			if(timings.size() > 0)
+			{
 			if((*it).unlock_time <= start_time)
 				timings.erase(it);
 			else
 				break;
+			}
 		}
 	}
 
@@ -247,6 +254,8 @@ enum status Channel::lock(double start_time, double duration, Event &event, bool
  * sort table by finish times (2nd row) */
 void Channel::unlock(double start_time, bool remove)
 {
+	printf("UNLOCK CALLED===================\n");
+	return;
 	/* remove expired channel lock entries */
 	if(remove)
 	{
