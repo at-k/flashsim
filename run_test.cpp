@@ -49,10 +49,11 @@ int main()
 	int NUM_PAGES = LAST_LBA;
 
 	
+	printf("NUM PAGES %d\n", NUM_PAGES);
 	for(i=0;i<NUM_PAGES;i++)
 	{
-		//result = ssd->event_arrive(WRITE, 0, 1, (double)(350 * i));
-		result = ssd->event_arrive(WRITE, 0, 1, 0);
+		result = ssd->event_arrive(WRITE, 0, 1, (double)(350 * i));
+		//result = ssd->event_arrive(WRITE, 0, 1, 0);
 	}
 
 	return 0;

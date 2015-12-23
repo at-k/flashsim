@@ -800,7 +800,12 @@ struct ftl_event
 	unsigned int logical_address;
 	double start_time;
 	double end_time;
-	int priority;
+};
+
+struct background_cleaning_blocks
+{
+	struct ssd_block block_to_clean;
+	struct ssd_block cleaning_block;
 };
 
 class FtlImpl_Page : public FtlParent
@@ -819,6 +824,8 @@ private:
 	std::list<struct ssd_block> free_block_list;
 	std::list<struct ssd_block> allocated_block_list;
 	std::vector<struct ftl_event> open_events;
+	std::vector<struct ftl_event> background_events;
+	std::vector<struct background_cleaning_blocks> bg_cleaning_blocks;
 	unsigned int clean_threshold;
 	double get_average_age(struct ssd_block block);
 	Address translate_lba_pba(unsigned int lba);
@@ -828,13 +835,15 @@ private:
 	unsigned int get_logical_block_num(unsigned int lba);
 	Address find_write_location(Address cur, bool *already_open);
 	bool increment_log_write_address(Event &event);
-	bool allocate_new_block(bool for_cleaning, Address requested_address, Event &event);
+	bool allocate_new_block(Address requested_address, Event &event);
 	unsigned int get_next_block_lba(unsigned int lba);
 	Address get_next_block_pba(Address pba);
 	enum status garbage_collect(Event &event);
-	enum status wear_level(Event &event);
+	//enum status wear_level(Event &event);
 	double age_variance_limit;
-	void add_event(Event event, int priority);
+	void add_event(Event event);
+	void add_background_event(struct ftl_event event);
+	void process_background_tasks(Event event);
 };
 
 
