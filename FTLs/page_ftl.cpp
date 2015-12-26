@@ -56,7 +56,7 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller):FtlParent(controller)
 		if(next_block_lba == 0)
 			break;
 	}
-	clean_threshold = OVERPROVISIONING * SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * PLANE_SIZE;
+	clean_threshold = float(OVERPROVISIONING)/100 * SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * PLANE_SIZE;
 	age_variance_limit = 1;	
 	open_events.reserve(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE);
 	background_events.reserve(BLOCK_SIZE);
@@ -492,6 +492,7 @@ enum status FtlImpl_Page::write(Event &event)
 	add_event(event);
 	if(free_block_list.size() < clean_threshold)
 	{
+		printf("free block list size %d, clean threshold %d\n", free_block_list.size(), clean_threshold);
 		garbage_collect(event);
 	}
 	return ret_status;
@@ -541,15 +542,22 @@ enum status FtlImpl_Page::garbage_collect(Event &event)
 	}
 	
 	average_lifetime_left = average_lifetime_left/(double)(RAW_SSD_BLOCKS);
+	printf("allocated block list size %d\n", allocated_block_list.size());
 	for(iter=allocated_block_list.begin();iter!=allocated_block_list.end();iter++)
 	{
 		if(iter == --allocated_block_list.end())
+		{
+			printf("over here\n");
 			continue;
+		}
 		float utilization = (float)iter->valid_page_count/(float)BLOCK_SIZE;
 		double age = get_average_age(*iter);
 		cur_benefit = (1.0 - utilization)*(float)age / (1.0 + utilization);
 		if(iter->lifetime_left == 0)
+		{
+			printf("here??\n");
 			continue;  
+		}
 		//float probab_to_skip = 0;
 		//srand(time(NULL));
 		if(iter->lifetime_left < age_variance_limit*average_lifetime_left)
@@ -558,7 +566,7 @@ enum status FtlImpl_Page::garbage_collect(Event &event)
 			//TODO: add these to a list and then process that list in case cleaning_possible is false
 			continue;
 		}
-
+		printf("%d %d %d\n", cur_benefit > 0, max_benefit == 0, cur_benefit > max_benefit);
 		if(cur_benefit > 0 && (max_benefit == 0 || cur_benefit > max_benefit)) //&& rand()/RAND_MAX >= probab_to_skip)
 		{
 			max_benefit = cur_benefit;

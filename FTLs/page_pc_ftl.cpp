@@ -575,7 +575,7 @@ enum status FtlImpl_Page_PC::garbage_collect(Event &event)
 
 	struct ssd_block target_block = *max_benefit_block_reference;
 
-	Address plane_address = target_block.address;
+	Address plane_address = target_block.physical_address;
 	plane_address.page = 0;
 	plane_address.block = 0;
 	plane_address.valid = PLANE;
@@ -584,12 +584,13 @@ enum status FtlImpl_Page_PC::garbage_collect(Event &event)
 		Address cur_block_address = plane_address;
 		cur_block_address.block = i;
 		cur_block_address.valid = BLOCK;
-		for(iter=allocated_block_list.begin();iter!=allocated_block_list.end();iter++)
+		for(iter=allocated_block_list.begin();iter!=allocated_block_list.end();)
 		{
 			if((*iter).physical_address == cur_block_address)
 			{
 				if(free_block_list.size() == 0 && bg_cleaning_blocks.size() > 0)
 					process_background_tasks(event, true);
+				struct ssd_block block_to_clean = *iter;
 				struct ssd_block cleaning_block = free_block_list.front();
 				unsigned int page_pointer = 0;
 				Address cur_page_address = block_to_clean.physical_address;
@@ -639,10 +640,12 @@ enum status FtlImpl_Page_PC::garbage_collect(Event &event)
 				new_cleaning_blocks.block_to_clean = block_to_clean;
 				new_cleaning_blocks.cleaning_block = cleaning_block;
 				
-				allocated_block_list.erase(max_benefit_block_reference);
+				allocated_block_list.erase(iter);
 				free_block_list.pop_front();
 				bg_cleaning_blocks.push_back(new_cleaning_blocks);
 			}
+			else
+				iter++;
 		}
 
 	}
