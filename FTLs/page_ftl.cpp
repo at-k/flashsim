@@ -56,7 +56,7 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller):FtlParent(controller)
 		if(next_block_lba == 0)
 			break;
 	}
-	clean_threshold = 2 * SSD_SIZE * PACKAGE_SIZE * DIE_SIZE;
+	clean_threshold = OVERPROVISIONING * SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * PLANE_SIZE;
 	age_variance_limit = 1;	
 	open_events.reserve(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE);
 	background_events.reserve(BLOCK_SIZE);
