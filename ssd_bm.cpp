@@ -232,46 +232,6 @@ void Block_manager::insert_events(Event &event)
 
 	num_insert_events++;
 
-	if (FTL_IMPLEMENTATION == IMPL_DFTL || FTL_IMPLEMENTATION == IMPL_BIMODAL)
-	{
-
-		ActiveByCost::iterator it = active_cost.get<1>().end();
-		--it;
-
-
-		while (num_to_erase != 0 && (*it)->get_pages_invalid() > 0 && (*it)->get_pages_valid() == BLOCK_SIZE)
-		{
-			if (current_writing_block != (*it)->physical_address)
-			{
-				//printf("erase p: %p phy: %li ratio: %i num: %i\n", (*it), (*it)->physical_address, (*it)->get_pages_invalid(), num_to_erase);
-				Block *blockErase = (*it);
-
-				// Let the FTL handle cleanup of the block.
-				ftl->cleanup_block(event, blockErase);
-
-				// Create erase event and attach to current event queue.
-				Event erase_event = Event(ERASE, event.get_logical_address(), 1, event.get_total_time());
-				erase_event.set_address(Address(blockErase->get_physical_address(), BLOCK));
-
-				// Execute erase
-				if (ftl->controller.issue(erase_event) == FAILURE) { assert(false);	}
-
-				free_list.push_back(blockErase);
-
-				event.incr_time_taken(erase_event.get_time_taken());
-
-				ftl->controller.stats.numFTLErase++;
-			}
-
-			it = active_cost.get<1>().end();
-			--it;
-
-			if (current_writing_block == (*it)->physical_address)
-			 --it;
-
-			num_to_erase--;
-		}
-	}
 }
 
 
