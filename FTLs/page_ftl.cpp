@@ -348,7 +348,7 @@ bool FtlImpl_Page::allocate_new_block(Address requested_address, Event &event)
 		if(bg_cleaning_blocks.size() > 0)
 		{
 			process_background_tasks(event, true);
-			printf("[ANB] There is space but its busy\n");
+			//printf("[ANB] There is space but its busy\n");
 		}
 		else
 		{
@@ -505,12 +505,11 @@ enum status FtlImpl_Page::trim(Event &event)
 
 enum status FtlImpl_Page::garbage_collect(Event &event)
 {
-	printf("GC called\n");
 	while(free_block_list.size() == 0)
 	{
 		if(bg_cleaning_blocks.size() > 0)
 		{
-			printf("There is space but its busy\n");
+			//printf("There is space but its busy\n");
 			process_background_tasks(event, true);
 		}
 		else
@@ -636,7 +635,7 @@ void FtlImpl_Page::process_background_tasks(Event &event, bool urgent)
 		return;
 	if(!urgent && background_events.front().start_time > cur_simulated_time)
 		return;
-	printf("Comparing %f and %f\n", background_events.front().start_time, cur_simulated_time);
+	//printf("Comparing %f and %f\n", background_events.front().start_time, cur_simulated_time);
 	while(background_events.size() > 0 && (urgent || background_events.front().start_time <= cur_simulated_time))
 	{
 		struct ftl_event first_event = background_events.front();
@@ -701,8 +700,8 @@ void FtlImpl_Page::process_background_tasks(Event &event, bool urgent)
 			if(background_events.size() > 0)
 			{
 				background_events.front().start_time = first_event.start_time + task_time;
-				printf("Comparing %f and %f\n", background_events.front().start_time, cur_simulated_time);
-				printf("%d %d\n", background_events.size(), background_events.front().start_time < cur_simulated_time);
+				//printf("Comparing %f and %f\n", background_events.front().start_time, cur_simulated_time);
+				//printf("%d %d\n", background_events.size(), background_events.front().start_time < cur_simulated_time);
 			}
 		}
 		else

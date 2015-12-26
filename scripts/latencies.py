@@ -5,18 +5,19 @@ import matplotlib.pyplot as plt
 
 def main():
 
+    root_folder = sys.argv[1]
     filename_array = []
     percentiles = [50, 99, 99.9];
     threads = [2, 4, 8, 16, 32]
 
-    data_file = open('data_file_90.dat', 'w')
+    data_file = open(root_folder + 'data_file_90.dat', 'w')
     for n_threads in threads:
         repeated_latency_array = dict()
         for p in percentiles:
             repeated_latency_array[p] = []
         
         for i in range(0, 1):
-            rw_file = open('read_2_1_90_' + str(n_threads) + '.out', 'r')
+            rw_file = open(root_folder + 'read_0_1_90_' + str(n_threads) + '.out', 'r')
            
 
             rw_latencies = []
