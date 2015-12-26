@@ -572,59 +572,81 @@ enum status FtlImpl_Page_PC::garbage_collect(Event &event)
 		return FAILURE;
 		//return wear_level(event);
 	} 
-	struct ssd_block block_to_clean = *max_benefit_block_reference;
-	struct ssd_block cleaning_block = free_block_list.front();
-	unsigned int page_pointer = 0;
-	Address cur_page_address = block_to_clean.physical_address;
-	bool clean_pages_found = false;
-	for(unsigned int i=0;i<BLOCK_SIZE;i++)
-	{
-		cur_page_address.page = i;
-		cur_page_address.valid = PAGE; 
-		if(cur_page_address == logical_page_list[block_to_clean.page_mapping[i]].physical_address)
-		{
-			struct ftl_event bg_read;
-			bg_read.type = READ;
-			bg_read.physical_address = cur_page_address;
-			bg_read.logical_address = block_to_clean.page_mapping[i];
-			bg_read.start_time = event.get_total_time() - event.get_time_taken();
-			bg_read.end_time = 0;
-			//add_background_event(bg_read);
-			background_events.push_back(bg_read);
-			struct ftl_event bg_write;
-			bg_write.type = WRITE;
-			bg_write.physical_address = cleaning_block.physical_address;
-			bg_write.physical_address.page = page_pointer;
-			bg_write.physical_address.valid = PAGE;
-			bg_write.logical_address = block_to_clean.page_mapping[i];
-			bg_write.start_time = 0;
-			bg_write.end_time = 0;
-			//add_background_event(bg_write);
-			background_events.push_back(bg_write);
-			page_pointer += 1;
-			clean_pages_found = true;
-		}
-	}
-	struct ftl_event bg_erase;
-	bg_erase.type = ERASE;
-	bg_erase.physical_address = block_to_clean.physical_address;
-	bg_erase.logical_address = translate_pba_lba(block_to_clean.physical_address);
-	if(clean_pages_found)
-		bg_erase.start_time = 0;
-	else
-		bg_erase.start_time = event.get_total_time() - event.get_time_taken();
-	bg_erase.end_time = 0;
 
-	//add_background_event(bg_erase);
-	background_events.push_back(bg_erase);
-	
-	struct background_cleaning_blocks new_cleaning_blocks;
-	new_cleaning_blocks.block_to_clean = block_to_clean;
-	new_cleaning_blocks.cleaning_block = cleaning_block;
-	
-	allocated_block_list.erase(max_benefit_block_reference);
-	free_block_list.pop_front();
-	bg_cleaning_blocks.push_back(new_cleaning_blocks);
+	struct ssd_block target_block = *max_benefit_block_reference;
+
+	Address plane_address = target_block.address;
+	plane_address.page = 0;
+	plane_address.block = 0;
+	plane_address.valid = PLANE;
+	for(int i=0;i<PLANE_SIZE;i++)
+	{
+		Address cur_block_address = plane_address;
+		cur_block_address.block = i;
+		cur_block_address.valid = BLOCK;
+		for(iter=allocated_block_list.begin();iter!=allocated_block_list.end();iter++)
+		{
+			if((*iter).physical_address == cur_block_address)
+			{
+				if(free_block_list.size() == 0 && bg_cleaning_blocks.size() > 0)
+					process_background_tasks(event, true);
+				struct ssd_block cleaning_block = free_block_list.front();
+				unsigned int page_pointer = 0;
+				Address cur_page_address = block_to_clean.physical_address;
+				bool clean_pages_found = false;
+				for(unsigned int i=0;i<BLOCK_SIZE;i++)
+				{
+					cur_page_address.page = i;
+					cur_page_address.valid = PAGE; 
+					if(cur_page_address == logical_page_list[block_to_clean.page_mapping[i]].physical_address)
+					{
+						struct ftl_event bg_read;
+						bg_read.type = READ;
+						bg_read.physical_address = cur_page_address;
+						bg_read.logical_address = block_to_clean.page_mapping[i];
+						bg_read.start_time = event.get_total_time() - event.get_time_taken();
+						bg_read.end_time = 0;
+						//add_background_event(bg_read);
+						background_events.push_back(bg_read);
+						struct ftl_event bg_write;
+						bg_write.type = WRITE;
+						bg_write.physical_address = cleaning_block.physical_address;
+						bg_write.physical_address.page = page_pointer;
+						bg_write.physical_address.valid = PAGE;
+						bg_write.logical_address = block_to_clean.page_mapping[i];
+						bg_write.start_time = 0;
+						bg_write.end_time = 0;
+						//add_background_event(bg_write);
+						background_events.push_back(bg_write);
+						page_pointer += 1;
+						clean_pages_found = true;
+					}
+				}
+				struct ftl_event bg_erase;
+				bg_erase.type = ERASE;
+				bg_erase.physical_address = block_to_clean.physical_address;
+				bg_erase.logical_address = translate_pba_lba(block_to_clean.physical_address);
+				if(clean_pages_found)
+					bg_erase.start_time = 0;
+				else
+					bg_erase.start_time = event.get_total_time() - event.get_time_taken();
+				bg_erase.end_time = 0;
+
+				//add_background_event(bg_erase);
+				background_events.push_back(bg_erase);
+				
+				struct background_cleaning_blocks new_cleaning_blocks;
+				new_cleaning_blocks.block_to_clean = block_to_clean;
+				new_cleaning_blocks.cleaning_block = cleaning_block;
+				
+				allocated_block_list.erase(max_benefit_block_reference);
+				free_block_list.pop_front();
+				bg_cleaning_blocks.push_back(new_cleaning_blocks);
+			}
+		}
+
+	}
+
 	return SUCCESS;
 }
 
@@ -668,6 +690,7 @@ void FtlImpl_Page_PC::process_background_tasks(Event &event, bool urgent)
 		}
 		if(urgent || perform_first_task)
 		{
+			bool is_erase = false;
 			Event bg_task(first_event.type, first_event.logical_address, 1, first_event.start_time);
 			bg_task.set_address(first_event.physical_address);
 			controller.issue(bg_task, !urgent);
@@ -694,7 +717,7 @@ void FtlImpl_Page_PC::process_background_tasks(Event &event, bool urgent)
 				free_block_list.push_back(block_to_clean);
 				allocated_block_list.push_back(cleaning_block);
 				bg_cleaning_blocks.erase(bg_cleaning_blocks.begin());
-				urgent = false;
+				is_erase = true;
 			}
 			background_events.erase(background_events.begin());
 			if(background_events.size() > 0)
@@ -703,6 +726,8 @@ void FtlImpl_Page_PC::process_background_tasks(Event &event, bool urgent)
 				//printf("Comparing %f and %f\n", background_events.front().start_time, cur_simulated_time);
 				//printf("%d %d\n", background_events.size(), background_events.front().start_time < cur_simulated_time);
 			}
+			if(urgent && is_erase)
+				break;
 		}
 		else
 		{

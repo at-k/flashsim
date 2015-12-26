@@ -668,6 +668,7 @@ void FtlImpl_Page::process_background_tasks(Event &event, bool urgent)
 		}
 		if(urgent || perform_first_task)
 		{
+			bool is_erase = false;
 			Event bg_task(first_event.type, first_event.logical_address, 1, first_event.start_time);
 			bg_task.set_address(first_event.physical_address);
 			controller.issue(bg_task, !urgent);
@@ -694,7 +695,7 @@ void FtlImpl_Page::process_background_tasks(Event &event, bool urgent)
 				free_block_list.push_back(block_to_clean);
 				allocated_block_list.push_back(cleaning_block);
 				bg_cleaning_blocks.erase(bg_cleaning_blocks.begin());
-				urgent = false;
+				is_erase = true;
 			}
 			background_events.erase(background_events.begin());
 			if(background_events.size() > 0)
@@ -703,6 +704,8 @@ void FtlImpl_Page::process_background_tasks(Event &event, bool urgent)
 				//printf("Comparing %f and %f\n", background_events.front().start_time, cur_simulated_time);
 				//printf("%d %d\n", background_events.size(), background_events.front().start_time < cur_simulated_time);
 			}
+			if(urgent && is_erase)
+				break;
 		}
 		else
 		{
