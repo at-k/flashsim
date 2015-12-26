@@ -96,8 +96,8 @@ enum status Controller::issue(Event &event_list, bool remove)
 				|| ssd.ram.read(*cur) == FAILURE
 				|| ssd.replace(*cur) == FAILURE)
 				return FAILURE;
-			//printf("READ: %d %d %d %d %d %d %f %f\n", remove, add.package, add.die, add.plane, add.block, add.page, cur->get_start_time(), cur->get_total_time());
-			//fflush(stdout);
+			printf("READ: %d %d %d %d %d %d %f %f\n", remove, add.package, add.die, add.plane, add.block, add.page, cur->get_start_time(), cur->get_total_time());
+			fflush(stdout);
 		}
 		else if(cur -> get_event_type() == WRITE)
 		{
@@ -109,8 +109,8 @@ enum status Controller::issue(Event &event_list, bool remove)
 				|| ssd.write(*cur, remove) == FAILURE
 				|| ssd.replace(*cur) == FAILURE)
 				return FAILURE;
-			//printf("WRITE: %d %d %d %d %d %d %f %f\n", remove, add.package, add.die, add.plane, add.block, add.page, cur->get_start_time(), cur->get_total_time());
-			//fflush(stdout);
+				printf("WRITE: %d %d %d %d %d %d %f %f\n", remove, add.package, add.die, add.plane, add.block, add.page, cur->get_start_time(), cur->get_total_time());
+			fflush(stdout);
 		}
 		else if(cur -> get_event_type() == ERASE)
 		{
@@ -119,8 +119,8 @@ enum status Controller::issue(Event &event_list, bool remove)
 			if(ssd.bus.lock(cur -> get_address().package, cur -> get_total_time(), BUS_CTRL_DELAY, *cur, remove) == FAILURE
 				|| ssd.erase(*cur, remove) == FAILURE)
 				return FAILURE;
-			//printf("ERASE: %d %d %d %d %d %d %f %f\n", remove, add.package, add.die, add.plane, add.block, add.page, cur->get_start_time(), cur->get_total_time());
-			//fflush(stdout);
+			printf("ERASE: %d %d %d %d %d %d %f %f\n", remove, add.package, add.die, add.plane, add.block, add.page, cur->get_start_time(), cur->get_total_time());
+			fflush(stdout);
 		}
 		else if(cur -> get_event_type() == MERGE)
 		{

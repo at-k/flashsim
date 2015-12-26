@@ -50,7 +50,7 @@ int main(int argc, char **argv)
 	bool write_data;
 	unsigned int req_per_thread = 1000;
 	
-	unsigned int total_read_count = 5000000, cur_read_count = 0;
+	unsigned int total_read_count = 50000, cur_read_count = 0;
 
 	int read_loc = 0;
 	int write_loc = 0;
@@ -188,7 +188,9 @@ int main(int argc, char **argv)
 			addresses.insert(location);
 			result = ssd->event_arrive(WRITE, location, 1, (double) next_request_time);
 			if(result == -1)
+			{
 				return -1;
+			}
 			count[position]++;
 			write_count++;
 		}	

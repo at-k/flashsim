@@ -842,7 +842,8 @@ private:
 	double age_variance_limit;
 	void add_event(Event event);
 	void add_background_event(struct ftl_event event);
-	void process_background_tasks(Event event);
+	void process_background_tasks(Event &event, bool urgent);
+	void process_open_events_table(Event event);
 };
 
 

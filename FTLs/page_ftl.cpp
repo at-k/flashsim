@@ -56,7 +56,7 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller):FtlParent(controller)
 		if(next_block_lba == 0)
 			break;
 	}
-	clean_threshold = SSD_SIZE * PACKAGE_SIZE * DIE_SIZE;
+	clean_threshold = 2 * SSD_SIZE * PACKAGE_SIZE * DIE_SIZE;
 	age_variance_limit = 1;	
 	open_events.reserve(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE);
 	background_events.reserve(BLOCK_SIZE);
@@ -343,9 +343,18 @@ bool FtlImpl_Page::increment_log_write_address(Event &event)
 bool FtlImpl_Page::allocate_new_block(Address requested_address, Event &event)
 {
 	unsigned int free_list_size = free_block_list.size();
-	if(free_list_size == 0)
+	while(free_list_size == 0)
 	{
-		return false;
+		if(bg_cleaning_blocks.size() > 0)
+		{
+			process_background_tasks(event, true);
+			printf("[ANB] There is space but its busy\n");
+		}
+		else
+		{
+			printf("[ANB] No space found\n");
+			return false;
+		}
 	}  
 	bool ret_val = false;
 	if(requested_address.valid == NONE)
@@ -377,19 +386,6 @@ bool FtlImpl_Page::allocate_new_block(Address requested_address, Event &event)
 		log_write_address.valid = PAGE;
 		ret_val = true;
 	}
-	if(free_list_size < clean_threshold)
-	{
-		//do cleaning and wear levelling
-
-		double start_time = event.get_total_time();
-
-		if(garbage_collect(event) != SUCCESS)
-		{
-
-			ret_val = false;
-		}
-
-	}
 	return ret_val;
 }
 
@@ -401,15 +397,19 @@ void FtlImpl_Page::add_event(Event event)
 	new_event.physical_address = event.get_address();
 	new_event.start_time = event.get_start_time();
 	new_event.end_time = event.get_total_time();
+	open_events.push_back(new_event);
+}
+
+void FtlImpl_Page::process_open_events_table(Event event)
+{
 	std::vector<struct ftl_event>::iterator iter;
 	for(iter=open_events.begin();iter!=open_events.end();)
 	{
-		if((*iter).end_time < new_event.start_time)
+		if((*iter).end_time < event.get_start_time())
 			open_events.erase(iter);
 		else
 			iter++;
 	}
-	open_events.push_back(new_event);
 }
 
 void FtlImpl_Page::add_background_event(struct ftl_event event)
@@ -420,8 +420,10 @@ void FtlImpl_Page::add_background_event(struct ftl_event event)
 FtlImpl_Page::~FtlImpl_Page(void)
 {
 }
+
 enum status FtlImpl_Page::read(Event &event)
 {
+	process_open_events_table(event);
 	unsigned int logical_page_num = event.get_logical_address();
 	if(logical_page_num >= ADDRESSABLE_SSD_PAGES)
 	{
@@ -433,7 +435,7 @@ enum status FtlImpl_Page::read(Event &event)
 		printf("returning false because page has not been written yet\n");
 		return FAILURE;
 	}
-	process_background_tasks(event);
+	process_background_tasks(event, false);
 	Address read_address = logical_page_list[logical_page_num].physical_address;
 	event.set_address(read_address);
 	controller.stats.numFTLRead++;
@@ -445,7 +447,7 @@ enum status FtlImpl_Page::read(Event &event)
 
 enum status FtlImpl_Page::write(Event &event)
 {
-
+	process_open_events_table(event);
 	unsigned int logical_page_num = event.get_logical_address();
 	if(!increment_log_write_address(event))
 	{
@@ -483,12 +485,15 @@ enum status FtlImpl_Page::write(Event &event)
 	(*log_write_iter).valid_page_count += 1;
 	(*log_write_iter).page_mapping[log_write_address.page] = logical_page_num;  
 	(*log_write_iter).last_page_written = log_write_address.page;
-	process_background_tasks(event);
+	process_background_tasks(event, false);
 	event.set_address(logical_page_list[logical_page_num].physical_address);
 	controller.stats.numFTLWrite++;
-
 	enum status ret_status = controller.issue(event, true);
 	add_event(event);
+	if(free_block_list.size() < clean_threshold)
+	{
+		garbage_collect(event);
+	}
 	return ret_status;
 }
 
@@ -500,10 +505,19 @@ enum status FtlImpl_Page::trim(Event &event)
 
 enum status FtlImpl_Page::garbage_collect(Event &event)
 {
-	if(free_block_list.size() == 0)
+	printf("GC called\n");
+	while(free_block_list.size() == 0)
 	{
-		printf("garbage collector returned FAILURE \n");
-		return FAILURE; 
+		if(bg_cleaning_blocks.size() > 0)
+		{
+			printf("There is space but its busy\n");
+			process_background_tasks(event, true);
+		}
+		else
+		{
+			printf("garbage collector returned FAILURE \n");
+			return FAILURE; 
+		}
 	}  		
 
 	std::list<struct ssd_block>::iterator iter, max_benefit_block_reference = allocated_block_list.end();
@@ -542,6 +556,7 @@ enum status FtlImpl_Page::garbage_collect(Event &event)
 		if(iter->lifetime_left < age_variance_limit*average_lifetime_left)
 		{
 			//probab_to_skip = 1.0 - (float)iter->lifetime_left/(age_variance_limit*average_lifetime_left);
+			//TODO: add these to a list and then process that list in case cleaning_possible is false
 			continue;
 		}
 
@@ -573,7 +588,7 @@ enum status FtlImpl_Page::garbage_collect(Event &event)
 			bg_read.type = READ;
 			bg_read.physical_address = cur_page_address;
 			bg_read.logical_address = block_to_clean.page_mapping[i];
-			bg_read.start_time = event.get_total_time();
+			bg_read.start_time = event.get_total_time() - event.get_time_taken();
 			bg_read.end_time = 0;
 			//add_background_event(bg_read);
 			background_events.push_back(bg_read);
@@ -598,7 +613,7 @@ enum status FtlImpl_Page::garbage_collect(Event &event)
 	if(clean_pages_found)
 		bg_erase.start_time = 0;
 	else
-		bg_erase.start_time = event.get_total_time();
+		bg_erase.start_time = event.get_total_time() - event.get_time_taken();
 	bg_erase.end_time = 0;
 
 	//add_background_event(bg_erase);
@@ -614,14 +629,15 @@ enum status FtlImpl_Page::garbage_collect(Event &event)
 	return SUCCESS;
 }
 
-void FtlImpl_Page::process_background_tasks(Event event)
+void FtlImpl_Page::process_background_tasks(Event &event, bool urgent)
 {
-	double cur_simulated_time = event.get_total_time();
+	double cur_simulated_time = event.get_start_time();
 	if(background_events.size() == 0)
 		return;
-	if(background_events.front().start_time > cur_simulated_time)
+	if(!urgent && background_events.front().start_time > cur_simulated_time)
 		return;
-	while(background_events.size() > 0 && background_events.front().start_time < cur_simulated_time)
+	printf("Comparing %f and %f\n", background_events.front().start_time, cur_simulated_time);
+	while(background_events.size() > 0 && (urgent || background_events.front().start_time <= cur_simulated_time))
 	{
 		struct ftl_event first_event = background_events.front();
 		Address candidate_address = first_event.physical_address;
@@ -637,18 +653,30 @@ void FtlImpl_Page::process_background_tasks(Event event)
 				candidate_address.plane == conflict_address.plane	
 				)
 			{
+				//printf("Found conflicting task at ");
+				//conflict_address.print();
+				//printf("\n");
+				//fflush(stdout);
 				perform_first_task = false;
-				break;
+				if(background_events.front().start_time < (*iter).end_time)
+					background_events.front().start_time = (*iter).end_time;	
+				if(!urgent)
+					break;
+				else if(event.get_total_time() < (*iter).end_time)
+					event.incr_time_taken((*iter).end_time - event.get_total_time());
 			}
 	
 		}
-		if(perform_first_task)
+		if(urgent || perform_first_task)
 		{
 			Event bg_task(first_event.type, first_event.logical_address, 1, first_event.start_time);
 			bg_task.set_address(first_event.physical_address);
-			controller.issue(bg_task, false);
-			add_event(bg_task);
+			controller.issue(bg_task, !urgent);
 			double task_time = bg_task.get_time_taken();
+			if(urgent)
+				event.incr_time_taken(task_time);
+			if(cur_simulated_time < first_event.start_time + task_time)
+				add_event(bg_task);
 			if(first_event.type == WRITE)
 			{
 				logical_page_list[first_event.logical_address].physical_address = first_event.physical_address;
@@ -667,10 +695,15 @@ void FtlImpl_Page::process_background_tasks(Event event)
 				free_block_list.push_back(block_to_clean);
 				allocated_block_list.push_back(cleaning_block);
 				bg_cleaning_blocks.erase(bg_cleaning_blocks.begin());
+				urgent = false;
 			}
 			background_events.erase(background_events.begin());
 			if(background_events.size() > 0)
+			{
 				background_events.front().start_time = first_event.start_time + task_time;
+				printf("Comparing %f and %f\n", background_events.front().start_time, cur_simulated_time);
+				printf("%d %d\n", background_events.size(), background_events.front().start_time < cur_simulated_time);
+			}
 		}
 		else
 		{
