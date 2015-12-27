@@ -56,7 +56,7 @@ FtlImpl_Page_PC::FtlImpl_Page_PC(Controller &controller):FtlParent(controller)
 		if(next_block_lba == 0)
 			break;
 	}
-	clean_threshold = OVERPROVISIONING * SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * PLANE_SIZE;
+	clean_threshold = float(OVERPROVISIONING)/100 * SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * PLANE_SIZE;
 	age_variance_limit = 1;	
 	open_events.reserve(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE);
 	background_events.reserve(BLOCK_SIZE);
@@ -579,6 +579,9 @@ enum status FtlImpl_Page_PC::garbage_collect(Event &event)
 	plane_address.page = 0;
 	plane_address.block = 0;
 	plane_address.valid = PLANE;
+
+
+
 	for(int i=0;i<PLANE_SIZE;i++)
 	{
 		Address cur_block_address = plane_address;
@@ -639,8 +642,7 @@ enum status FtlImpl_Page_PC::garbage_collect(Event &event)
 				struct background_cleaning_blocks new_cleaning_blocks;
 				new_cleaning_blocks.block_to_clean = block_to_clean;
 				new_cleaning_blocks.cleaning_block = cleaning_block;
-				
-				allocated_block_list.erase(iter);
+				iter = allocated_block_list.erase(iter);
 				free_block_list.pop_front();
 				bg_cleaning_blocks.push_back(new_cleaning_blocks);
 			}

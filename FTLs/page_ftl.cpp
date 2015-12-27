@@ -547,7 +547,6 @@ enum status FtlImpl_Page::garbage_collect(Event &event)
 	{
 		if(iter == --allocated_block_list.end())
 		{
-			printf("over here\n");
 			continue;
 		}
 		float utilization = (float)iter->valid_page_count/(float)BLOCK_SIZE;
@@ -555,7 +554,6 @@ enum status FtlImpl_Page::garbage_collect(Event &event)
 		cur_benefit = (1.0 - utilization)*(float)age / (1.0 + utilization);
 		if(iter->lifetime_left == 0)
 		{
-			printf("here??\n");
 			continue;  
 		}
 		//float probab_to_skip = 0;
