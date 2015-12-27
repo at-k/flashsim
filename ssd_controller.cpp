@@ -217,7 +217,9 @@ const FtlParent &Controller::get_ftl(void) const
 	return (*ftl);
 }
 
-void Controller::print_ftl_statistics()
+void Controller::print_ftl_statistics(FILE *fp)
 {
-	ftl->print_ftl_statistics();
+	ftl->get_min_max_erases();
+	fprintf(fp, "# Reads: %d\n# Writes: %d\n# Erases: %d\nMin Erases: %d\nMax Erases: %d\n", stats.numRead, stats.numWrite, stats.numErase, stats.minErase, stats.maxErase);
+	//ftl->print_ftl_statistics();
 }

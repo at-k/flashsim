@@ -240,6 +240,7 @@ class Wear_Leveler;
 class Block_manager;
 class FtlParent;
 class FtlImpl_Page;
+class FtlImpl_Page_PC;
 class FtlImpl_Fast;
 
 class Ram;
@@ -286,7 +287,16 @@ public:
 class Stats
 {
 public:
+	
+	long numRead;
+	long numWrite;
+	long numErase;
+	long minErase;
+	long maxErase;
+	
 	// Flash Translation Layer
+	/**** These counters are not maintained *********/
+	//TODO Remove the unmaintained counters
 	long numFTLRead;
 	long numFTLWrite;
 	long numFTLErase;
@@ -765,6 +775,7 @@ public:
 
 	virtual void print_ftl_statistics();
 
+	virtual void get_min_max_erases();
 	friend class Block_manager;
 
 	ulong get_erases_remaining(const Address &address) const;
@@ -816,6 +827,7 @@ public:
 	enum status read(Event &event);
 	enum status write(Event &event);
 	enum status trim(Event &event);
+	void get_min_max_erases();
 private:
 	unsigned int latest_write_time;
 	struct logical_page *logical_page_list;
@@ -854,6 +866,7 @@ public:
 	enum status read(Event &event);
 	enum status write(Event &event);
 	enum status trim(Event &event);
+	void get_min_max_erases();
 private:
 	unsigned int latest_write_time;
 	struct logical_page *logical_page_list;
@@ -892,6 +905,7 @@ public:
 	enum status read(Event &event);
 	enum status write(Event &event);
 	enum status trim(Event &event);
+	void get_min_max_erases();
 private:
 	void initialize_log_pages();
 
@@ -961,7 +975,7 @@ public:
 	friend class FtlImpl_Page_PC;
 
 	Stats stats;
-	void print_ftl_statistics();
+	void print_ftl_statistics(FILE *fp);
 	const FtlParent &get_ftl(void) const;
 private:
 	enum status issue(Event &event_list, bool remove = false);
@@ -998,7 +1012,7 @@ public:
 	void write_header(FILE *stream);
 	const Controller &get_controller(void) const;
 
-	void print_ftl_statistics();
+	void print_ftl_statistics(FILE *fp);
 	double ready_at(void);
 private:
 	enum status read(Event &event, bool remove = false);

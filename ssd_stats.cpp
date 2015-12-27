@@ -36,6 +36,13 @@ Stats::Stats()
 
 void Stats::reset()
 {
+
+	numRead = 0;
+	numWrite = 0;
+	numErase = 0;
+	minErase = 0;
+	maxErase = 0;
+
 	// FTL
 	numFTLRead = 0;
 	numFTLWrite = 0;

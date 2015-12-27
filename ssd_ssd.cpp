@@ -123,7 +123,6 @@ Ssd::~Ssd(void)
 	free(data);
 	ulong pageSize = ((ulong)(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * PLANE_SIZE * BLOCK_SIZE)) * (ulong)PAGE_SIZE;
 	munmap(page_data, pageSize);
-
 	return;
 }
 
@@ -329,9 +328,9 @@ void Ssd::write_statistics(FILE *stream)
 	controller.stats.write_statistics(stream);
 }
 
-void Ssd::print_ftl_statistics()
+void Ssd::print_ftl_statistics(FILE *fp)
 {
-	controller.print_ftl_statistics();
+	controller.print_ftl_statistics(fp);
 }
 
 void Ssd::write_header(FILE *stream)

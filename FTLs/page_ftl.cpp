@@ -248,7 +248,8 @@ Address FtlImpl_Page::find_write_location(Address cur, bool *already_open)
 	if(min_queue_iter != allocated_block_list.end())
 	{
 		ret_address = (*min_queue_iter).physical_address;
-		ret_address.page = (*min_queue_iter).last_page_written;
+		//ret_address.page = (*min_queue_iter).last_page_written;
+		ret_address.page = 0;
 		ret_address.valid = PAGE;
 		*already_open = true;
 	}
@@ -311,7 +312,18 @@ bool FtlImpl_Page::increment_log_write_address(Event &event)
 	Address next_write_address = find_write_location(log_write_address, &already_open);
 	if(next_write_address.valid == NONE)
 	{
-		if(log_write_address.page < BLOCK_SIZE - 1)
+		//TODO improve performance here by having an allocted flag in the struct ssd_block
+		Address log_write_block_address = log_write_address;
+		log_write_block_address.page = 0;
+		log_write_block_address.valid = BLOCK;
+		bool still_allocated = false;
+		std::list<struct ssd_block>::iterator iter;
+		for(iter=allocated_block_list.begin();iter!=allocated_block_list.end();iter++)
+		{	
+			if((*iter).physical_address == log_write_block_address)
+				still_allocated = true;
+		}
+		if(still_allocated && log_write_address.page < BLOCK_SIZE - 1)
 		{
 			log_write_address.page += 1;
 			return true;
@@ -417,6 +429,35 @@ void FtlImpl_Page::add_background_event(struct ftl_event event)
 	background_events.push_back(event);
 }
 
+void FtlImpl_Page::get_min_max_erases()
+{
+	std::list<struct ssd_block>::iterator iter, start, end;
+	start = allocated_block_list.begin();
+	end = allocated_block_list.end();
+	unsigned int min_erases = UINT_MAX;
+	unsigned int max_erases = 0;
+	for(iter=start;iter!=end;iter++)
+	{
+		unsigned int erases = BLOCK_ERASES - (*iter).lifetime_left;
+		if(erases < min_erases)
+			min_erases = erases;
+		if(erases > max_erases)
+			max_erases = erases;	
+	}
+	start = free_block_list.begin();
+	end = free_block_list.end();
+	for(iter=start;iter!=end;iter++)
+	{
+		unsigned int erases = BLOCK_ERASES - (*iter).lifetime_left;
+		if(erases < min_erases)
+			min_erases = erases;
+		if(erases > max_erases)
+			max_erases = erases;	
+	}
+	printf("setting min and max erases\n");
+	controller.stats.minErase = min_erases;
+	controller.stats.maxErase = max_erases;
+}
 FtlImpl_Page::~FtlImpl_Page(void)
 {
 }

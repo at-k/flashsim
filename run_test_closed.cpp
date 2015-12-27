@@ -230,7 +230,7 @@ int main(int argc, char **argv)
 		*/
 		
 	}
-	printf("experiment ended with write_count as %d\n", write_count);
+	fprintf(read_file, "experiment ended with write_count as %d\n", write_count);
 	delete ssd;
 	return 0;
 }

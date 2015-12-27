@@ -46,26 +46,24 @@ int main()
 	int LAST_LBA = NUMBER_OF_ADDRESSABLE_BLOCKS * BLOCK_SIZE;
 
 	int i = 0;
-	int NUM_PAGES = LAST_LBA + 2 * BLOCK_SIZE;
+	int NUM_PAGES = 2 * LAST_LBA;
 
 	
 	printf("NUM PAGES %d\n", NUM_PAGES);
 	for(i=0;i<NUM_PAGES;i++)
 	{
 		int write_address = i%LAST_LBA;
-		if(i>=LAST_LBA)
-			printf("Overwriting\n");
-		printf("writing number %d: %d\n", i, write_address);
-		result = ssd->event_arrive(WRITE, write_address, 1, (double)(0));
+		result = ssd->event_arrive(WRITE, write_address, 1, (double)(i*350));
 		if(result == -1)
 		{
+			printf("breaking at write %d\n", i);
 			break;
 		}
 		//result = ssd->event_arrive(WRITE, 0, 1, 0);
 	}
-	printf("Last write!\n");
-	result = ssd->event_arrive(WRITE, 0, 1, 5000000000);
 
+	ssd->print_ftl_statistics(stdout);
+	delete ssd;
 	return 0;
 
 	/*
