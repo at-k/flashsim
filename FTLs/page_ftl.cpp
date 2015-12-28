@@ -689,6 +689,7 @@ void FtlImpl_Page::process_background_tasks(Event &event, bool urgent)
 		Address candidate_address = first_event.physical_address;
 		std::vector<struct ftl_event>::iterator iter;
 		bool perform_first_task = true;
+		double event_total_time = event.get_total_time(); 
 		for(iter=open_events.begin();iter!=open_events.end();iter++)
 		{
 		
@@ -708,10 +709,17 @@ void FtlImpl_Page::process_background_tasks(Event &event, bool urgent)
 					background_events.front().start_time = (*iter).end_time;	
 				if(!urgent)
 					break;
-				else if(event.get_total_time() < (*iter).end_time)
-					event.incr_time_taken((*iter).end_time - event.get_total_time());
+				else if(event_total_time < (*iter).end_time)
+				{
+					double diff = (*iter).end_time - event_total_time;
+					event_total_time += diff;
+				}
 			}
 	
+		}
+		if(urgent)
+		{
+			event.incr_time_taken(event_total_time - event.get_total_time());
 		}
 		if(urgent || perform_first_task)
 		{
@@ -724,11 +732,14 @@ void FtlImpl_Page::process_background_tasks(Event &event, bool urgent)
 				event.incr_time_taken(task_time);
 			if(cur_simulated_time < first_event.start_time + task_time)
 				add_event(bg_task);
+			if(first_event.type == READ)
+				controller.stats.numRead++;				
 			if(first_event.type == WRITE)
 			{
 				logical_page_list[first_event.logical_address].physical_address = first_event.physical_address;
 				bg_cleaning_blocks.front().cleaning_block.page_mapping[first_event.physical_address.page] = first_event.logical_address;
 				bg_cleaning_blocks.front().cleaning_block.last_page_written = first_event.physical_address.page;
+				controller.stats.numWrite++;
 			}
 			if(first_event.type == ERASE)
 			{
@@ -743,6 +754,7 @@ void FtlImpl_Page::process_background_tasks(Event &event, bool urgent)
 				allocated_block_list.push_back(cleaning_block);
 				bg_cleaning_blocks.erase(bg_cleaning_blocks.begin());
 				is_erase = true;
+				controller.stats.numErase++;
 			}
 			background_events.erase(background_events.begin());
 			if(background_events.size() > 0)

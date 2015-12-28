@@ -52,6 +52,9 @@ Controller::Controller(Ssd &parent):
 	case 2:
 		ftl = new FtlImpl_Fast(*this);
 		break;
+	case 3:
+		ftl = new FtlImpl_Page_Cache(*this);
+		break;
 	}
 	return;
 }
