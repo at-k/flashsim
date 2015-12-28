@@ -73,3 +73,7 @@ void FtlParent::print_ftl_statistics()
 {
 	return;
 }
+void FtlParent::get_min_max_erases()
+{
+	return;
+}

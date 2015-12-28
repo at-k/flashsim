@@ -675,3 +675,7 @@ void FtlImpl_Fast::print_ftl_statistics()
 	Block_manager::instance()->print_statistics();
 }
 
+void FtlImpl_Fast::get_min_max_erases()
+{
+	return;
+}
