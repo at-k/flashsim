@@ -74,7 +74,6 @@ Bus::Bus(uint num_channels, double ctrl_delay, double data_delay, uint table_siz
 	}
 	for(i = 0; i < num_channels; i++)
 	{
-		printf("creating channel for %d\n", i);
 		(void) new (&channels[i]) Channel(ctrl_delay, data_delay, table_size, max_connections);
 	}
 

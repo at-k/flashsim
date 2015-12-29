@@ -50,7 +50,7 @@ int main(int argc, char **argv)
 	bool write_data;
 	unsigned int req_per_thread = 1000;
 	
-	unsigned int total_read_count = 5000000, cur_read_count = 0;
+	unsigned int total_read_count = 5000, cur_read_count = 0;
 
 	int read_loc = 0;
 	int write_loc = 0;
@@ -230,7 +230,7 @@ int main(int argc, char **argv)
 		*/
 		
 	}
-	fprintf(read_file, "========================");
+	fprintf(read_file, "========================\n");
 	fprintf(read_file, "experiment ended with write_count as %d\n", write_count);
 	ssd->print_ftl_statistics(read_file);
 	fclose(read_file);

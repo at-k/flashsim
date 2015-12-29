@@ -59,6 +59,12 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller):FtlParent(controller)
 	clean_threshold = float(OVERPROVISIONING)/100 * SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * PLANE_SIZE;
 	age_variance_limit = 1;	
 	open_events.reserve(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE);
+	//queue_lengths = NULL;
+	queue_lengths = (unsigned int *)malloc(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * sizeof(unsigned int));
+	for(unsigned int i=0;i<SSD_SIZE * PACKAGE_SIZE * DIE_SIZE;i++)
+	{
+		queue_lengths[i] = 0;
+	}
 	background_events.reserve(BLOCK_SIZE);
 	bg_cleaning_blocks.reserve(PLANE_SIZE);
 }
@@ -224,6 +230,10 @@ Address FtlImpl_Page::find_write_location(Address cur, bool *already_open)
 		}
 		else
 		{
+			unsigned int plane_num = candidate_address.package*PACKAGE_SIZE*DIE_SIZE + candidate_address.die*DIE_SIZE + candidate_address.plane;
+			
+			unsigned int queue_count = queue_lengths[plane_num];
+			/*
 			std::vector<struct ftl_event>::iterator event_iter;
 			unsigned int queue_count = 0;
 			for(event_iter=open_events.begin();event_iter!=open_events.end();event_iter++)
@@ -237,6 +247,7 @@ Address FtlImpl_Page::find_write_location(Address cur, bool *already_open)
 							queue_count += 1;
 				}
 			}
+			*/
 			if(queue_count < min_queue_len || !found_block)
 			{
 				min_queue_iter = iter;
@@ -267,6 +278,10 @@ Address FtlImpl_Page::find_write_location(Address cur, bool *already_open)
 			}
 			else
 			{
+				unsigned int plane_num = candidate_address.package*PACKAGE_SIZE*DIE_SIZE + candidate_address.die*DIE_SIZE + candidate_address.plane;
+				
+				unsigned int queue_count = queue_lengths[plane_num];
+				/*
 				std::vector<struct ftl_event>::iterator event_iter;
 				unsigned int queue_count = 0;
 				for(event_iter=open_events.begin();event_iter!=open_events.end();event_iter++)
@@ -280,6 +295,7 @@ Address FtlImpl_Page::find_write_location(Address cur, bool *already_open)
 								queue_count += 1;
 					}
 				}
+				*/
 				if(queue_count < min_queue_len || !found_block)
 				{
 					min_iter = free_iter;
@@ -409,15 +425,22 @@ void FtlImpl_Page::add_event(Event event)
 	new_event.start_time = event.get_start_time();
 	new_event.end_time = event.get_total_time();
 	open_events.push_back(new_event);
+	unsigned int plane_num = new_event.physical_address.package*PACKAGE_SIZE*DIE_SIZE + new_event.physical_address.die*DIE_SIZE + new_event.physical_address.plane;
+	queue_lengths[plane_num]++;
 }
 
 void FtlImpl_Page::process_open_events_table(Event event)
 {
 	std::vector<struct ftl_event>::iterator iter;
+	double start_time = event.get_start_time();
 	for(iter=open_events.begin();iter!=open_events.end();)
 	{
-		if((*iter).end_time < event.get_start_time())
+		if((*iter).end_time < start_time)
+		{
+			unsigned int plane_num = (iter->physical_address).package*PACKAGE_SIZE*DIE_SIZE + (iter->physical_address).die*DIE_SIZE + (iter->physical_address).plane;
+			queue_lengths[plane_num]--;
 			open_events.erase(iter);
+		}
 		else
 			iter++;
 	}
@@ -453,9 +476,10 @@ void FtlImpl_Page::get_min_max_erases()
 		if(erases > max_erases)
 			max_erases = erases;	
 	}
-	printf("setting min and max erases\n");
 	controller.stats.minErase = min_erases;
 	controller.stats.maxErase = max_erases;
+	printf("returning");
+	fflush(stdout);
 }
 FtlImpl_Page::~FtlImpl_Page(void)
 {
@@ -500,36 +524,27 @@ enum status FtlImpl_Page::write(Event &event)
 	Address log_write_block_address = log_write_address;
 	log_write_block_address.page = 0;
 	log_write_block_address.valid = BLOCK;
-	if(currently_mapped_address.valid == PAGE)
+	Address currently_mapped_block_address = currently_mapped_address;
+	currently_mapped_block_address.page = 0;
+	currently_mapped_block_address.valid = BLOCK;
+	bool need_invalidation = (currently_mapped_address.valid == PAGE);
+	for(iter=allocated_block_list.begin();iter!=allocated_block_list.end();iter++)
 	{
-		currently_mapped_address.page = 0;
-		currently_mapped_address.valid = BLOCK;
-		for(iter=allocated_block_list.begin();iter!=allocated_block_list.end();iter++)
-		{
-			if(iter->physical_address == currently_mapped_address)
-			{
-				iter->valid_page_count -= 1;
-			}
-		}
-	}
-	logical_page_list[logical_page_num].physical_address = log_write_address;
-
-	for(iter= allocated_block_list.begin();iter!=allocated_block_list.end();iter++)
-	{
+		if(need_invalidation && iter->physical_address == currently_mapped_block_address)
+			iter->valid_page_count -= 1;
 		if(iter->physical_address == log_write_block_address)
-		{
 			log_write_iter = iter;
-		}
 	}
+	process_background_tasks(event, false);
+	event.set_address(log_write_address);
+	controller.stats.numWrite++;
+	enum status ret_status = controller.issue(event, true);
+	add_event(event);
+	logical_page_list[logical_page_num].physical_address = log_write_address;
 	(*log_write_iter).last_write_time = latest_write_time++;    
 	(*log_write_iter).valid_page_count += 1;
 	(*log_write_iter).page_mapping[log_write_address.page] = logical_page_num;  
 	(*log_write_iter).last_page_written = log_write_address.page;
-	process_background_tasks(event, false);
-	event.set_address(logical_page_list[logical_page_num].physical_address);
-	enum status ret_status = controller.issue(event, true);
-	controller.stats.numFTLWrite++;
-	add_event(event);
 	if(free_block_list.size() < clean_threshold)
 	{
 		garbage_collect(event);
@@ -581,7 +596,6 @@ enum status FtlImpl_Page::garbage_collect(Event &event)
 	}
 	
 	average_lifetime_left = average_lifetime_left/(double)(RAW_SSD_BLOCKS);
-	printf("allocated block list size %d\n", allocated_block_list.size());
 	for(iter=allocated_block_list.begin();iter!=allocated_block_list.end();iter++)
 	{
 		if(iter == --allocated_block_list.end())
@@ -684,39 +698,44 @@ void FtlImpl_Page::process_background_tasks(Event &event, bool urgent)
 	{
 		struct ftl_event first_event = background_events.front();
 		Address candidate_address = first_event.physical_address;
-		std::vector<struct ftl_event>::iterator iter;
 		bool perform_first_task = true;
-		double event_total_time = event.get_total_time(); 
-		for(iter=open_events.begin();iter!=open_events.end();iter++)
+		unsigned int plane_num = candidate_address.package*PACKAGE_SIZE*DIE_SIZE + candidate_address.die*DIE_SIZE + candidate_address.plane;
+		unsigned int queue_count = queue_lengths[plane_num];
+		if(queue_count != 0)
 		{
-		
-			Address conflict_address = (*iter).physical_address;
-			if( (*iter).start_time < first_event.start_time &&
-				candidate_address.package == conflict_address.package &&
-				candidate_address.die == conflict_address.die &&
-				candidate_address.plane == conflict_address.plane	
-				)
+			double event_total_time = event.get_total_time(); 
+			std::vector<struct ftl_event>::iterator iter;
+			for(iter=open_events.begin();iter!=open_events.end();iter++)
 			{
-				//printf("Found conflicting task at ");
-				//conflict_address.print();
-				//printf("\n");
-				//fflush(stdout);
-				perform_first_task = false;
-				if(background_events.front().start_time < (*iter).end_time)
-					background_events.front().start_time = (*iter).end_time;	
-				if(!urgent)
-					break;
-				else if(event_total_time < (*iter).end_time)
+			
+				Address conflict_address = (*iter).physical_address;
+				if( (*iter).start_time < first_event.start_time &&
+					candidate_address.package == conflict_address.package &&
+					candidate_address.die == conflict_address.die &&
+					candidate_address.plane == conflict_address.plane	
+					)
 				{
-					double diff = (*iter).end_time - event_total_time;
-					event_total_time += diff;
+					//printf("Found conflicting task at ");
+					//conflict_address.print();
+					//printf("\n");
+					//fflush(stdout);
+					perform_first_task = false;
+					if(background_events.front().start_time < (*iter).end_time)
+						background_events.front().start_time = (*iter).end_time;	
+					if(!urgent)
+						break;
+					else if(event_total_time < (*iter).end_time)
+					{
+						double diff = (*iter).end_time - event_total_time;
+						event_total_time += diff;
+					}
 				}
+		
 			}
-	
-		}
-		if(urgent)
-		{
-			event.incr_time_taken(event_total_time - event.get_total_time());
+			if(urgent)
+			{
+				event.incr_time_taken(event_total_time - event.get_total_time());
+			}
 		}
 		if(urgent || perform_first_task)
 		{

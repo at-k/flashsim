@@ -862,6 +862,7 @@ private:
 	std::list<struct ssd_block> free_block_list;
 	std::list<struct ssd_block> allocated_block_list;
 	std::vector<struct ftl_event> open_events;
+	unsigned int *queue_lengths;
 	std::vector<struct ftl_event> background_events;
 	std::vector<struct background_cleaning_blocks> bg_cleaning_blocks;
 	unsigned int clean_threshold;
@@ -901,6 +902,7 @@ private:
 	std::list<struct ssd_block> free_block_list;
 	std::list<struct ssd_block> allocated_block_list;
 	std::vector<struct ftl_event> open_events;
+	unsigned int *queue_lengths;
 	std::vector<struct ftl_event> background_events;
 	std::vector<struct background_cleaning_blocks> bg_cleaning_blocks;
 	unsigned int clean_threshold;
@@ -940,6 +942,7 @@ private:
 	std::list<struct ssd_block> free_block_list;
 	std::list<struct ssd_block> allocated_block_list;
 	std::vector<struct ftl_event> open_events;
+	unsigned int *queue_lengths;
 	std::vector<struct ftl_event> background_events;
 	std::vector<struct background_cleaning_blocks> bg_cleaning_blocks;
 	unsigned int clean_threshold;
