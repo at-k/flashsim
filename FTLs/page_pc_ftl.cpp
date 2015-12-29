@@ -659,7 +659,7 @@ enum status FtlImpl_Page_PC::garbage_collect(Event &event)
 				}
 				if(free_list_iter == free_block_list.end())
 				{
-					printf("Could not find a space in another plane");
+					printf("Could not find a space in another plane\n");
 					free_list_iter = free_block_list.begin();
 				}
 				struct ssd_block cleaning_block = *free_list_iter;

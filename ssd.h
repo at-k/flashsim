@@ -115,6 +115,12 @@ extern const uint BLOCK_SIZE;
 extern const uint BLOCK_ERASES;
 extern const double BLOCK_ERASE_DELAY;
 
+/*Cache Class
+	Size of the cache	
+*/
+extern const uint CACHE_SIZE;
+
+
 /* Page class:
  * 	delay for Page reads
  * 	delay for Page writes */
@@ -247,6 +253,7 @@ class FtlImpl_Fast;
 class Ram;
 class Controller;
 class Ssd;
+class Cache;
 
 
 
@@ -820,6 +827,24 @@ struct background_cleaning_blocks
 	struct ssd_block cleaning_block;
 };
 
+struct cache_entry
+{
+	unsigned int address;
+	double entry_time;
+};
+
+class Cache
+{
+public:
+	Cache();
+	~Cache();
+	bool present_in_cache(Event &event, bool actual_time);
+	void place_in_cache(Event &event, bool actual_time);
+private:
+	unsigned int size;
+	std::list<struct cache_entry> cached_addresses;
+};
+
 class FtlImpl_Page : public FtlParent
 {
 public:
@@ -1013,6 +1038,7 @@ public:
 	friend class FtlImpl_Fast;
 	friend class Block_manager;
 	friend class FtlImpl_Page_PC;
+	friend class FtlImpl_Page_Cache;
 
 	Stats stats;
 	void print_ftl_statistics(FILE *fp);
@@ -1078,6 +1104,7 @@ private:
 	Controller controller;
 	Ram ram;
 	Bus bus;
+	Cache cache;
 	Package * const data;
 	ulong erases_remaining;
 	ulong least_worn;

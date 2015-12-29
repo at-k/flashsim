@@ -230,7 +230,10 @@ int main(int argc, char **argv)
 		*/
 		
 	}
+	fprintf(read_file, "========================");
 	fprintf(read_file, "experiment ended with write_count as %d\n", write_count);
+	ssd->print_ftl_statistics(read_file);
+	fclose(read_file);
 	delete ssd;
 	return 0;
 }

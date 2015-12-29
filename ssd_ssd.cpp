@@ -60,7 +60,8 @@ Ssd::Ssd(uint ssd_size):
 	least_worn(0), 
 
 	/* assume hardware created at time 0 and had an implied free erasure */
-	last_erase_time(0.0)
+	last_erase_time(0.0),
+	cache()
 {
 	uint i;
 

@@ -157,6 +157,8 @@ uint CACHE_DFTL_LIMIT = 8;
 
 uint OVERPROVISIONING = 10;
 
+uint CACHE_SIZE = 0;
+
 /*
  * Parallelism mode.
  * 0 -> Normal
@@ -238,6 +240,8 @@ void load_entry(char *name, double value, uint line_number) {
 		RAID_NUMBER_OF_PHYSICAL_SSDS = value;
 	else if (!strcmp(name, "OVERPROVISIONING"))
 		OVERPROVISIONING = value;
+	else if (!strcmp(name, "CACHE_SIZE"))
+		CACHE_SIZE = value;
 	else
 		fprintf(stderr, "Config file parsing error on line %u\n", line_number);
 	return;

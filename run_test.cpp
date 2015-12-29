@@ -46,9 +46,10 @@ int main()
 	int LAST_LBA = NUMBER_OF_ADDRESSABLE_BLOCKS * BLOCK_SIZE;
 
 	int i = 0;
-	int NUM_PAGES = 2 * LAST_LBA;
+	int NUM_PAGES = LAST_LBA;
 
 	
+
 	printf("NUM PAGES %d\n", NUM_PAGES);
 	for(i=0;i<NUM_PAGES;i++)
 	{
@@ -61,6 +62,26 @@ int main()
 		}
 		//result = ssd->event_arrive(WRITE, 0, 1, 0);
 	}
+	double initial_delay = i*350;
+	for(i=NUM_PAGES;i>=0;i--)
+	{
+		int read_address = i%LAST_LBA;
+		result = ssd->event_arrive(READ, read_address, 1, (double)(initial_delay + i*50));
+		if(result == -1)
+		{
+			printf("breaking at read %d\n", i);
+			break;
+		}
+		printf("%f\n", result);
+		result = ssd->event_arrive(READ, read_address, 1, (double)(initial_delay + i*50 + 40));
+		if(result == -1)
+		{
+			printf("breaking at read %d\n", i);
+			break;
+		}
+		printf("%f\n", result);
+	}
+	
 
 	ssd->print_ftl_statistics(stdout);
 	delete ssd;
