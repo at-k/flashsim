@@ -70,8 +70,6 @@ Channel::Channel(double ctrl_delay, double data_delay, uint table_size, uint max
 
 	timings.reserve(PACKAGE_SIZE * DIE_SIZE);
 
-	printf("[Constructor] The size for bus is %d\n", timings.size());
-	fflush(stdout);
 
 	ready_at = -1;
 }

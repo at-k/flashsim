@@ -248,8 +248,7 @@ Address FtlImpl_Page::find_write_location(Address cur, bool *already_open)
 	if(min_queue_iter != allocated_block_list.end())
 	{
 		ret_address = (*min_queue_iter).physical_address;
-		//ret_address.page = (*min_queue_iter).last_page_written;
-		ret_address.page = 0;
+		ret_address.page = (*min_queue_iter).last_page_written;
 		ret_address.valid = PAGE;
 		*already_open = true;
 	}
@@ -292,7 +291,7 @@ Address FtlImpl_Page::find_write_location(Address cur, bool *already_open)
 		if(min_iter != free_block_list.end())
 		{
 			ret_address = (*min_iter).physical_address;
-			ret_address.page = (*min_iter).last_page_written;
+			ret_address.page = 0;
 			ret_address.valid = PAGE;
 			*already_open = false;
 		}
@@ -528,12 +527,11 @@ enum status FtlImpl_Page::write(Event &event)
 	(*log_write_iter).last_page_written = log_write_address.page;
 	process_background_tasks(event, false);
 	event.set_address(logical_page_list[logical_page_num].physical_address);
-	controller.stats.numFTLWrite++;
 	enum status ret_status = controller.issue(event, true);
+	controller.stats.numFTLWrite++;
 	add_event(event);
 	if(free_block_list.size() < clean_threshold)
 	{
-		printf("free block list size %d, clean threshold %d\n", free_block_list.size(), clean_threshold);
 		garbage_collect(event);
 	}
 	return ret_status;
@@ -605,7 +603,6 @@ enum status FtlImpl_Page::garbage_collect(Event &event)
 			//TODO: add these to a list and then process that list in case cleaning_possible is false
 			continue;
 		}
-		printf("%d %d %d\n", cur_benefit > 0, max_benefit == 0, cur_benefit > max_benefit);
 		if(cur_benefit > 0 && (max_benefit == 0 || cur_benefit > max_benefit)) //&& rand()/RAND_MAX >= probab_to_skip)
 		{
 			max_benefit = cur_benefit;
