@@ -776,8 +776,8 @@ public:
 	FtlParent(Controller &controller);
 
 	virtual ~FtlParent () {};
-	virtual enum status read(Event &event) = 0;
-	virtual enum status write(Event &event) = 0;
+	virtual enum status read(Event &event, bool actual_time = true) = 0;
+	virtual enum status write(Event &event, bool actual_time = true) = 0;
 	virtual enum status trim(Event &event) = 0;
 	virtual void cleanup_block(Event &event, Block *block);
 
@@ -821,11 +821,13 @@ struct ftl_event
 	double end_time;
 };
 
+
 struct background_cleaning_blocks
 {
 	struct ssd_block block_to_clean;
 	struct ssd_block cleaning_block;
 };
+
 
 struct cache_entry
 {
@@ -850,8 +852,8 @@ class FtlImpl_Page : public FtlParent
 public:
 	FtlImpl_Page(Controller &controller);
 	~FtlImpl_Page();
-	enum status read(Event &event);
-	enum status write(Event &event);
+	enum status read(Event &event, bool actual_time = true);
+	enum status write(Event &event, bool actual_time = true);
 	enum status trim(Event &event);
 	void get_min_max_erases();
 private:
@@ -864,7 +866,7 @@ private:
 	std::vector<struct ftl_event> open_events;
 	unsigned int *queue_lengths;
 	std::vector<struct ftl_event> background_events;
-	std::vector<struct background_cleaning_blocks> bg_cleaning_blocks;
+	std::vector<struct ssd_block> bg_cleaning_blocks;
 	unsigned int clean_threshold;
 	double get_average_age(struct ssd_block block);
 	Address translate_lba_pba(unsigned int lba);
@@ -873,8 +875,8 @@ private:
 	unsigned int get_block_starting_lba(unsigned int lba);
 	unsigned int get_logical_block_num(unsigned int lba);
 	Address find_write_location(Address cur, bool *already_open);
-	bool increment_log_write_address(Event &event);
-	bool allocate_new_block(Address requested_address, Event &event);
+	bool increment_log_write_address(Event &event, bool *gc_required, bool bg_write);
+	bool allocate_new_block(Address requested_address, Event &event, bool *gc_required, bool bg_write);
 	unsigned int get_next_block_lba(unsigned int lba);
 	Address get_next_block_pba(Address pba);
 	enum status garbage_collect(Event &event);
@@ -890,8 +892,8 @@ class FtlImpl_Page_PC : public FtlParent
 public:
 	FtlImpl_Page_PC(Controller &controller);
 	~FtlImpl_Page_PC();
-	enum status read(Event &event);
-	enum status write(Event &event);
+	enum status read(Event &event, bool actual_time = true);
+	enum status write(Event &event, bool actual_time = true);
 	enum status trim(Event &event);
 	void get_min_max_erases();
 private:
@@ -913,8 +915,8 @@ private:
 	unsigned int get_block_starting_lba(unsigned int lba);
 	unsigned int get_logical_block_num(unsigned int lba);
 	Address find_write_location(Address cur, bool *already_open);
-	bool increment_log_write_address(Event &event);
-	bool allocate_new_block(Address requested_address, Event &event);
+	bool increment_log_write_address(Event &event, bool *gc_required);
+	bool allocate_new_block(Address requested_address, Event &event, bool *gc_required);
 	unsigned int get_next_block_lba(unsigned int lba);
 	Address get_next_block_pba(Address pba);
 	enum status garbage_collect(Event &event);
@@ -930,8 +932,8 @@ class FtlImpl_Page_Cache : public FtlParent
 public:
 	FtlImpl_Page_Cache(Controller &controller);
 	~FtlImpl_Page_Cache();
-	enum status read(Event &event);
-	enum status write(Event &event);
+	enum status read(Event &event, bool actual_time = true);
+	enum status write(Event &event, bool actual_time = true);
 	enum status trim(Event &event);
 	void get_min_max_erases();
 private:
@@ -953,8 +955,8 @@ private:
 	unsigned int get_block_starting_lba(unsigned int lba);
 	unsigned int get_logical_block_num(unsigned int lba);
 	Address find_write_location(Address cur, bool *already_open);
-	bool increment_log_write_address(Event &event);
-	bool allocate_new_block(Address requested_address, Event &event);
+	bool increment_log_write_address(Event &event, bool *gc_required);
+	bool allocate_new_block(Address requested_address, Event &event, bool *gc_required);
 	unsigned int get_next_block_lba(unsigned int lba);
 	Address get_next_block_pba(Address pba);
 	enum status garbage_collect(Event &event);
@@ -970,8 +972,8 @@ class FtlImpl_Fast : public FtlParent
 public:
 	FtlImpl_Fast(Controller &controller);
 	~FtlImpl_Fast();
-	enum status read(Event &event);
-	enum status write(Event &event);
+	enum status read(Event &event, bool actual_time = true);
+	enum status write(Event &event, bool actual_time = true);
 	enum status trim(Event &event);
 	void get_min_max_erases();
 private:

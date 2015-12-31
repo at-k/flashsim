@@ -19,6 +19,8 @@ def main():
     start_time = -1
     end_time = -1
     for line in file:
+        if line.startswith("="):
+            break
         if num_lines != -1 and count >= num_lines:
             break
         try:
@@ -26,8 +28,8 @@ def main():
             req_time = float(line.split('\t')[0].strip())
             latencies.append(latency)
             time = req_time + latency
-            if time < start_time or start_time == -1:
-                start_time = time
+            if req_time < start_time or start_time == -1:
+                start_time = req_time
             if time > end_time or end_time == -1:
                 end_time = time
             count += 1
@@ -37,6 +39,7 @@ def main():
     for p in percentiles:
         print p, numpy.percentile(latencies, p)
 
+    print end_time, start_time
     print 'total duration ', (end_time - start_time)/1000000, ' seconds'
 
 if __name__ == "__main__":

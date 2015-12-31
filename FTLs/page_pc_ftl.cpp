@@ -264,7 +264,7 @@ Address FtlImpl_Page_PC::find_write_location(Address cur, bool *already_open)
 		*already_open = true;
 	}
 	unsigned int free_list_size = free_block_list.size();
-	if(free_list_size > clean_threshold)
+	if(!(found_block && min_queue_len == 0) && free_list_size > clean_threshold)
 	{
 		std::list<struct ssd_block>::iterator free_iter, min_iter = free_block_list.end();
 		for(free_iter=free_block_list.begin();free_iter!=free_block_list.end();free_iter++)
@@ -316,12 +316,12 @@ Address FtlImpl_Page_PC::find_write_location(Address cur, bool *already_open)
 	return ret_address;
 }
 
-bool FtlImpl_Page_PC::increment_log_write_address(Event &event)
+bool FtlImpl_Page_PC::increment_log_write_address(Event &event, bool *gc_required)
 {
 	Address null_address;
 	null_address.valid = NONE;
 	if(log_write_address.valid == NONE)
-		return allocate_new_block(null_address, event);
+		return allocate_new_block(null_address, event, gc_required);
 
 	bool already_open = false;
 	Address next_write_address = find_write_location(log_write_address, &already_open);
@@ -343,7 +343,7 @@ bool FtlImpl_Page_PC::increment_log_write_address(Event &event)
 			return true;
 		}
 
-		return allocate_new_block(null_address, event);
+		return allocate_new_block(null_address, event, gc_required);
 	}
 	else
 	{
@@ -355,21 +355,20 @@ bool FtlImpl_Page_PC::increment_log_write_address(Event &event)
 				log_write_address.page += 1;
 				return true;
 			}
-			return allocate_new_block(null_address, event);
+			return allocate_new_block(null_address, event, gc_required);
 		}
 		else
 		{
 			next_write_address.page = 0;
 			next_write_address.valid = BLOCK;
-			return allocate_new_block(next_write_address, event);
+			return allocate_new_block(next_write_address, event, gc_required);
 		}
 	}
 }
 
-bool FtlImpl_Page_PC::allocate_new_block(Address requested_address, Event &event)
+bool FtlImpl_Page_PC::allocate_new_block(Address requested_address, Event &event, bool *gc_required)
 {
-	unsigned int free_list_size = free_block_list.size();
-	while(free_list_size == 0)
+	while(free_block_list.size() == 0)
 	{
 		if(bg_cleaning_blocks.size() > 0)
 		{
@@ -382,6 +381,8 @@ bool FtlImpl_Page_PC::allocate_new_block(Address requested_address, Event &event
 			return false;
 		}
 	}  
+	if(free_block_list.size() <= clean_threshold)
+		*gc_required = true;
 	bool ret_val = false;
 	if(requested_address.valid == NONE)
 	{
@@ -483,7 +484,7 @@ FtlImpl_Page_PC::~FtlImpl_Page_PC(void)
 {	
 }
 
-enum status FtlImpl_Page_PC::read(Event &event)
+enum status FtlImpl_Page_PC::read(Event &event, bool actual_time)
 {
 	process_open_events_table(event);
 	unsigned int logical_page_num = event.get_logical_address();
@@ -507,11 +508,12 @@ enum status FtlImpl_Page_PC::read(Event &event)
 
 }
 
-enum status FtlImpl_Page_PC::write(Event &event)
+enum status FtlImpl_Page_PC::write(Event &event, bool actual_time)
 {
 	process_open_events_table(event);
+	bool gc_required = false;
 	unsigned int logical_page_num = event.get_logical_address();
-	if(!increment_log_write_address(event))
+	if(!increment_log_write_address(event, &gc_required))
 	{
 		printf("returning known FAILURE\n");
 		return FAILURE; 
@@ -543,7 +545,7 @@ enum status FtlImpl_Page_PC::write(Event &event)
 	(*log_write_iter).valid_page_count += 1;
 	(*log_write_iter).page_mapping[log_write_address.page] = logical_page_num;  
 	(*log_write_iter).last_page_written = log_write_address.page;
-	if(free_block_list.size() < clean_threshold)
+	if(gc_required)
 	{
 		garbage_collect(event);
 	}

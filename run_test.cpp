@@ -46,43 +46,23 @@ int main()
 	int LAST_LBA = NUMBER_OF_ADDRESSABLE_BLOCKS * BLOCK_SIZE;
 
 	int i = 0;
-	int NUM_PAGES = LAST_LBA;
+	int NUM_PAGES = 2*LAST_LBA;
 
-	
+	printf("writing %d = 2*%d\n", NUM_PAGES, LAST_LBA);
 
-	printf("NUM PAGES %d\n", NUM_PAGES);
+	double val = 10000;
 	for(i=0;i<NUM_PAGES;i++)
 	{
 		int write_address = i%LAST_LBA;
-		result = ssd->event_arrive(WRITE, write_address, 1, (double)(i*350));
+		result = ssd->event_arrive(WRITE, write_address, 1, (double)(i*val));
 		if(result == -1)
 		{
 			printf("breaking at write %d\n", i);
 			break;
 		}
-		//result = ssd->event_arrive(WRITE, 0, 1, 0);
+		printf("--------------------%f\n", result);
 	}
-	double initial_delay = i*350;
-	for(i=NUM_PAGES;i>=0;i--)
-	{
-		int read_address = i%LAST_LBA;
-		result = ssd->event_arrive(READ, read_address, 1, (double)(initial_delay + i*50));
-		if(result == -1)
-		{
-			printf("breaking at read %d\n", i);
-			break;
-		}
-		printf("%f\n", result);
-		result = ssd->event_arrive(READ, read_address, 1, (double)(initial_delay + i*50 + 40));
-		if(result == -1)
-		{
-			printf("breaking at read %d\n", i);
-			break;
-		}
-		printf("%f\n", result);
-	}
-	
-
+	printf("here??\n");
 	ssd->print_ftl_statistics(stdout);
 	delete ssd;
 	return 0;

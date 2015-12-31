@@ -50,7 +50,7 @@ int main(int argc, char **argv)
 	bool write_data;
 	unsigned int req_per_thread = 1000;
 	
-	unsigned int total_read_count = 5000, cur_read_count = 0;
+	unsigned int total_read_count = 5000000, cur_read_count = 0;
 
 	int read_loc = 0;
 	int write_loc = 0;
@@ -116,6 +116,7 @@ int main(int argc, char **argv)
 	}	
 	unsigned int location = 0;
 	unsigned int write_count = 0;
+	bool loop = true;
 	for(unsigned int i=0;i<q_depth;i++)
 	{
 		double result;
@@ -125,7 +126,10 @@ int main(int argc, char **argv)
 			//location = (write_loc+1)%lastLBA;	
 			result = ssd->event_arrive(WRITE, location, 1, (double) initial_delay);
 			if(result == -1)
-				return -1;
+			{
+				fprintf(read_file, "==========\nCould not do a write, incomplete experiment\n");
+				goto exit;
+			}
 			addresses.insert(location);
 			write_count++;
 		}	
@@ -140,7 +144,10 @@ int main(int argc, char **argv)
 			
 			result = ssd->event_arrive(READ, location, 1, (double) initial_delay);
 			if(result == -1)
-				return -1;
+			{
+				fprintf(read_file, "==========\nCould not do a read, incomplete experiment\n");
+				goto exit;
+			}
 			cur_read_count++;
 			fprintf(read_file, "%.5lf\t%.5lf\n", initial_delay, result);
 		}
@@ -158,7 +165,6 @@ int main(int argc, char **argv)
 		}
 	}
 	*/
-	bool loop = true;
 
 	while(loop)
 	{
@@ -189,7 +195,8 @@ int main(int argc, char **argv)
 			result = ssd->event_arrive(WRITE, location, 1, (double) next_request_time);
 			if(result == -1)
 			{
-				return -1;
+				fprintf(read_file, "==========\nCould not do a write, incomplete experiment\n");
+				goto exit;
 			}
 			count[position]++;
 			write_count++;
@@ -205,7 +212,10 @@ int main(int argc, char **argv)
 			cur_read_count++;	
 			result = ssd->event_arrive(READ, location, 1, (double) next_request_time);
 			if(result == -1)	
-				return -1;
+			{
+				fprintf(read_file, "==========\nCould not do a read, incomplete experiment\n");
+				goto exit;
+			}
 			fprintf(read_file, "%.5lf\t%.5lf\n", next_request_time, result);
 			count[position]++;
 		}
@@ -230,6 +240,8 @@ int main(int argc, char **argv)
 		*/
 		
 	}
+
+exit:
 	fprintf(read_file, "========================\n");
 	fprintf(read_file, "experiment ended with write_count as %d\n", write_count);
 	ssd->print_ftl_statistics(read_file);
