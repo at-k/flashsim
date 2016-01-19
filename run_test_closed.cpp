@@ -242,9 +242,9 @@ int main(int argc, char **argv)
 	}
 
 exit:
-	fprintf(read_file, "========================\n");
-	fprintf(read_file, "experiment ended with write_count as %d\n", write_count);
-	ssd->print_ftl_statistics(read_file);
+	fprintf(stdout, "========================\n");
+	fprintf(stdout, "experiment ended with write_count as %d\n", write_count);
+	ssd->print_ftl_statistics(stdout);
 	fclose(read_file);
 	delete ssd;
 	return 0;
