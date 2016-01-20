@@ -657,6 +657,7 @@ enum status FtlImpl_Page_Cache::trim(Event &event)
 
 enum status FtlImpl_Page_Cache::garbage_collect(Event &event)
 {
+	/*
 	printf("And we have reacehd here in GC\n");
 	//fflush(stdout);
 	while(free_block_list.size() <= 1)
@@ -684,6 +685,7 @@ enum status FtlImpl_Page_Cache::garbage_collect(Event &event)
 		printf("GC is seriously out of space now. Just leave, will you?\n");
 		return FAILURE;
 	}
+	*/
 	std::list<struct ssd_block>::iterator iter, max_benefit_block_reference = allocated_block_list.end();
 	float max_benefit = 0, cur_benefit;
 	bool cleaning_possible = false;

@@ -392,7 +392,7 @@ bool FtlImpl_Page::increment_log_write_address(Event &event, bool *gc_required, 
 
 bool FtlImpl_Page::allocate_new_block(Address requested_address, Event &event, bool *gc_required, bool bg_write)
 {
-	while(!bg_write && free_block_list.size() <= 1)
+	while(!bg_write && free_block_list.size() <= 2)
 	{
 		if(bg_cleaning_blocks.size() > 0)
 		{
@@ -609,6 +609,7 @@ enum status FtlImpl_Page::trim(Event &event)
 
 enum status FtlImpl_Page::garbage_collect(Event &event)
 {
+	/*
 	while(free_block_list.size() <= 1)
 	{
 		if(bg_cleaning_blocks.size() > 0)
@@ -631,6 +632,7 @@ enum status FtlImpl_Page::garbage_collect(Event &event)
 	{
 		return FAILURE;
 	}
+	*/
 	std::list<struct ssd_block>::iterator iter, max_benefit_block_reference = allocated_block_list.end();
 	float max_benefit = 0, cur_benefit;
 	bool cleaning_possible = false;

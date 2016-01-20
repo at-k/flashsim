@@ -73,7 +73,7 @@ int main(int argc, char **argv)
 	unsigned int lastLBA = NUMBER_OF_ADDRESSABLE_BLOCKS * BLOCK_SIZE;
 
 
-	strcat(read_file_name, "read_");
+	strcat(read_file_name, "closed_read_");
 	strcat(read_file_name, ftl_implementation);
 	strcat(read_file_name, "_");
 	strcat(read_file_name, argv[1]);
@@ -83,7 +83,18 @@ int main(int argc, char **argv)
 	strcat(read_file_name, argv[3]);
 	strcat(read_file_name, ".out");
 
+	strcat(write_file_name, "closed_write_");
+	strcat(write_file_name, ftl_implementation);
+	strcat(write_file_name, "_");
+	strcat(write_file_name, argv[1]);
+	strcat(write_file_name, "_");
+	strcat(write_file_name, argv[2]);
+	strcat(write_file_name, "_");
+	strcat(write_file_name, argv[3]);
+	strcat(write_file_name, ".out");
+
 	read_file = fopen(read_file_name, "w");
+	write_file = fopen(write_file_name, "w");
 
 	unsigned int occupied = util_percent*lastLBA/100;
 	unsigned int i=0;
@@ -132,6 +143,7 @@ int main(int argc, char **argv)
 			}
 			addresses.insert(location);
 			write_count++;
+			fprintf(write_file, "%.5lf\t%.5lf\n", initial_delay, result);
 		}	
 		else
 		{
@@ -199,6 +211,7 @@ int main(int argc, char **argv)
 				goto exit;
 			}
 			count[position]++;
+			fprintf(write_file, "%.5lf\t%.5lf\n", next_request_time, result);
 			write_count++;
 		}	
 		else
@@ -246,6 +259,7 @@ exit:
 	fprintf(stdout, "experiment ended with write_count as %d\n", write_count);
 	ssd->print_ftl_statistics(stdout);
 	fclose(read_file);
+	fclose(write_file);
 	delete ssd;
 	return 0;
 }
