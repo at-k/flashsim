@@ -340,7 +340,7 @@ bool FtlImpl_Page::increment_log_write_address(Event &event, bool *gc_required, 
 	Address next_write_address = find_write_location(log_write_address, &already_open);
 	if(next_write_address.valid == NONE)
 	{
-		printf("case 1\n");
+		//printf("case 1\n");
 		Address log_write_block_address = log_write_address;
 		log_write_block_address.page = 0;
 		log_write_block_address.valid = BLOCK;
@@ -357,34 +357,34 @@ bool FtlImpl_Page::increment_log_write_address(Event &event, bool *gc_required, 
 		}
 		if(still_allocated && log_write_address.page < BLOCK_SIZE - 1)
 		{
-			printf("case 2\n");
+			//printf("case 2\n");
 			log_write_address.page += 1;
 			//(*iter).last_page_written = log_write_address.page;
 			return true;
 		}
-		printf("case 3\n");
+		//printf("case 3\n");
 		return allocate_new_block(null_address, event, gc_required, bg_write);
 	}
 	else
 	{
 		if(already_open)
 		{
-			printf("case 4\n");
+			//printf("case 4\n");
 			log_write_address = next_write_address;
 			if(log_write_address.page < BLOCK_SIZE - 1)
 			{
 				log_write_address.page += 1;
-				printf("case 5\n");
+				//printf("case 5\n");
 				return true;
 			}
-			printf("case 6\n");
+			//printf("case 6\n");
 			return allocate_new_block(null_address, event, gc_required, bg_write);
 		}
 		else
 		{
 			next_write_address.page = 0;
 			next_write_address.valid = BLOCK;
-			printf("case 7\n");
+			//printf("case 7\n");
 			return allocate_new_block(next_write_address, event, gc_required, bg_write);
 		}
 	}
@@ -396,7 +396,7 @@ bool FtlImpl_Page::allocate_new_block(Address requested_address, Event &event, b
 	{
 		if(bg_cleaning_blocks.size() > 0)
 		{
-			printf("processing urgently from allocate\n");
+			//printf("processing urgently from allocate\n");
 			process_background_tasks(event, true);
 			//printf("[ANB] There is space but its busy\n");
 		}
@@ -404,7 +404,7 @@ bool FtlImpl_Page::allocate_new_block(Address requested_address, Event &event, b
 		{
 			if(free_block_list.size() == 0)
 			{
-				printf("here\n");
+				//printf("here\n");
 				return false;
 			}
 			break;
@@ -412,7 +412,7 @@ bool FtlImpl_Page::allocate_new_block(Address requested_address, Event &event, b
 	}  
 	if(free_block_list.size() == 0)
 	{
-		printf("here 1\n");
+		//printf("here 1\n");
 		return false;
 	}
 	if(free_block_list.size() <= clean_threshold)
@@ -449,7 +449,7 @@ bool FtlImpl_Page::allocate_new_block(Address requested_address, Event &event, b
 		log_write_address.valid = PAGE;
 		ret_val = true;
 	}
-	printf("here 2\n");
+	//printf("here 2\n");
 	return ret_val;
 }
 
@@ -522,7 +522,7 @@ FtlImpl_Page::~FtlImpl_Page(void)
 
 enum status FtlImpl_Page::read(Event &event, bool actual_time)
 {
-	printf("=======\nGot a read for %d at %f\n", event.get_logical_address(), event.get_start_time());
+	//printf("=======\nGot a read for %d at %f\n", event.get_logical_address(), event.get_start_time());
 	if(actual_time)
 	{
 		process_open_events_table(event);
@@ -550,7 +550,7 @@ enum status FtlImpl_Page::read(Event &event, bool actual_time)
 
 enum status FtlImpl_Page::write(Event &event, bool actual_time)
 {
-	printf("========\nGot a write for %d at %f\n", event.get_logical_address(), event.get_start_time());
+	//printf("========\nGot a write for %d at %f\n", event.get_logical_address(), event.get_start_time());
 	if(actual_time)
 	{
 		process_open_events_table(event);
@@ -583,19 +583,19 @@ enum status FtlImpl_Page::write(Event &event, bool actual_time)
 	event.set_address(log_write_address);
 	controller.stats.numWrite++;
 	enum status ret_status = controller.issue(event, actual_time);
-	printf("written at ");
-	log_write_address.print();
-	printf("\n");
+	//printf("written at ");
+	//log_write_address.print();
+	//printf("\n");
 	add_event(event);
 	logical_page_list[logical_page_num].physical_address = log_write_address;
 	(*log_write_iter).last_write_time = latest_write_time++;    
 	(*log_write_iter).valid_page_count += 1;
-	printf("set valid page count to %d\n", (*log_write_iter).valid_page_count);
+	//printf("set valid page count to %d\n", (*log_write_iter).valid_page_count);
 	(*log_write_iter).page_mapping[log_write_address.page] = logical_page_num;  
 	(*log_write_iter).last_page_written = log_write_address.page;
 	if(actual_time && gc_required)
 	{
-		printf("GC called, free block list size is %d and background cleaning block size is %d\n", free_block_list.size(), bg_cleaning_blocks.size());
+		//printf("GC called, free block list size is %d and background cleaning block size is %d\n", free_block_list.size(), bg_cleaning_blocks.size());
 		garbage_collect(event);
 	}
 	return ret_status;
@@ -722,9 +722,9 @@ enum status FtlImpl_Page::garbage_collect(Event &event)
 	} 
 	else
 	{
-		printf("cleaning ");
-		(max_benefit_block_reference->physical_address).print();
-		printf(" with %d erases remaining and valid page count as %d\n", max_benefit_block_reference->lifetime_left, max_benefit_block_reference->valid_page_count);
+		//printf("cleaning ");
+		//(max_benefit_block_reference->physical_address).print();
+		//printf(" with %d erases remaining and valid page count as %d\n", max_benefit_block_reference->lifetime_left, max_benefit_block_reference->valid_page_count);
 	}
 	struct ssd_block block_to_clean = *max_benefit_block_reference;
 	//struct ssd_block cleaning_block = free_block_list.front();
@@ -774,7 +774,7 @@ enum status FtlImpl_Page::garbage_collect(Event &event)
 	
 	allocated_block_list.erase(max_benefit_block_reference);
 	bg_cleaning_blocks.push_back(block_to_clean);
-	printf("bg cleaning blocks size is %d\n", bg_cleaning_blocks.size());
+	//printf("bg cleaning blocks size is %d\n", bg_cleaning_blocks.size());
 	return SUCCESS;
 }
 
@@ -788,13 +788,13 @@ void FtlImpl_Page::process_background_tasks(Event &event, bool urgent)
 	if(!urgent && background_events.front().start_time > cur_simulated_time)
 		return;
 	//printf("Comparing %f and %f\n", background_events.front().start_time, cur_simulated_time);
-	printf("processing background tasks\n");
+	//printf("processing background tasks\n");
 	while(background_events.size() > 0 && (urgent || background_events.front().start_time <= cur_simulated_time))
 	{
 		struct ftl_event first_event = background_events.front();
 		Address candidate_address = first_event.physical_address;
 		bool perform_first_task = true;
-		printf("want to operate at time %f\n", first_event.start_time);
+		//printf("want to operate at time %f\n", first_event.start_time);
 		if(first_event.type != WRITE)
 		{
 			unsigned int plane_num = candidate_address.package*PACKAGE_SIZE*DIE_SIZE + candidate_address.die*DIE_SIZE + candidate_address.plane;
@@ -841,12 +841,12 @@ void FtlImpl_Page::process_background_tasks(Event &event, bool urgent)
 			{
 				if(logical_page_list[first_event.logical_address].physical_address == first_event.physical_address)
 				{
-					printf("[PBT] reading at %f\n", first_event.start_time);
+					//printf("[PBT] reading at %f\n", first_event.start_time);
 					controller.stats.numRead++;
 					Event bg_read(first_event.type, first_event.logical_address, 1, first_event.start_time);
 					read(bg_read, false);
 					task_time = bg_read.get_time_taken();
-					printf("[PBT] internal read time %f\n", task_time);
+					//printf("[PBT] internal read time %f\n", task_time);
 				}
 				else
 				{
@@ -861,12 +861,12 @@ void FtlImpl_Page::process_background_tasks(Event &event, bool urgent)
 			{
 				if(logical_page_list[first_event.logical_address].physical_address == first_event.physical_address && event.get_logical_address() != first_event.logical_address)
 				{
-					printf("[PBT] writing at %f\n", first_event.start_time);
+					//printf("[PBT] writing at %f\n", first_event.start_time);
 					controller.stats.numWrite++;
 					Event bg_write(first_event.type, first_event.logical_address, 1, first_event.start_time);
 					write(bg_write, false);
 					task_time = bg_write.get_time_taken();
-					printf("[PBT] internal write time %f\n", task_time);
+					//printf("[PBT] internal write time %f\n", task_time);
 				}
 				else
 				{
@@ -878,7 +878,7 @@ void FtlImpl_Page::process_background_tasks(Event &event, bool urgent)
 			}
 			else if(first_event.type == ERASE)
 			{
-				printf("[PBT] erasing at %f\n", first_event.start_time);
+				//printf("[PBT] erasing at %f\n", first_event.start_time);
 				Event bg_erase(first_event.type, first_event.logical_address, 1, first_event.start_time);
 				bg_erase.set_address(first_event.physical_address);
 				controller.issue(bg_erase, false);
@@ -889,10 +889,10 @@ void FtlImpl_Page::process_background_tasks(Event &event, bool urgent)
 				block_to_clean.lifetime_left -= 1;
 				free_block_list.push_back(block_to_clean);
 				bg_cleaning_blocks.erase(bg_cleaning_blocks.begin());
-				printf("background cleaning blocks size is %d after erase and free block list size is %d\n", bg_cleaning_blocks.size(), free_block_list.size());
+				//printf("background cleaning blocks size is %d after erase and free block list size is %d\n", bg_cleaning_blocks.size(), free_block_list.size());
 				is_erase = true;
 				controller.stats.numErase++;
-				printf("[PBT] internal erase time %f\n", task_time);
+				//printf("[PBT] internal erase time %f\n", task_time);
 			}
 			if(urgent)
 				event.incr_time_taken(task_time);
