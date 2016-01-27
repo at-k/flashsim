@@ -547,8 +547,40 @@ void Plane::serialize_access(double start_time, double duration, Event &event, b
 		}
 	}
 
+
+	if(event.get_event_type() == READ)
+	{
+		printf("Waits on plane for read of duration %f\n", duration);
+		double last_time = start_time;
+		for(it=first;it!=insert_location;it++)
+		{
+			printf("Type: ");
+			switch(it->type)
+			{
+				case READ:
+					printf("READ ");
+					break;
+				case WRITE:
+					printf("WRITE ");
+					break;
+				case ERASE:
+					printf("ERASE ");
+					break;
+				default:
+					printf("UNKNOWN ");
+					break;
+			}
+			printf("Duration: %f Start %f End %f \n", it->unlock_time - last_time, it->lock_time, it->unlock_time);
+			last_time = it->unlock_time;
+		}
+
+		printf("Total plane wait time: %f\n", sched_time - start_time);
+		printf("=====================================================\n");
+	}
+
 	/* write scheduling info in free table slot */
 	lock_times lt;
+	lt.type = event.get_event_type();
 	lt.lock_time = sched_time;
 	lt.unlock_time = sched_time + duration;
 	timings.insert(insert_location, lt);

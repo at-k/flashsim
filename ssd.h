@@ -426,6 +426,7 @@ private:
 };
 
 struct lock_times {
+	enum event_type type;
 	double lock_time;
 	double unlock_time;
 };

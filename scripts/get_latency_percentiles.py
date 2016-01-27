@@ -4,7 +4,7 @@ import numpy
 import matplotlib.pyplot as plt
 
 def main():
-    percentiles = [50, 90, 99, 99.9]
+    percentiles = [50, 90, 99, 99.9, 100]
     filename = sys.argv[1]
     num_lines = int(sys.argv[2])
         
