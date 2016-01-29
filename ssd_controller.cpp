@@ -93,8 +93,8 @@ enum status Controller::issue(Event &event_list, bool remove)
 
 		if(cur -> get_event_type() == READ)
 		{
-			if(!ssd.cache.present_in_cache(*cur, remove))
-			{
+			//if(!ssd.cache.present_in_cache(*cur, remove))
+			//{
 				Address add = cur->get_address();
 				assert(cur -> get_address().valid > NONE);
 				if(ssd.bus.lock(cur -> get_address().package, cur -> get_total_time(), BUS_CTRL_DELAY, *cur, remove) == FAILURE
@@ -104,13 +104,13 @@ enum status Controller::issue(Event &event_list, bool remove)
 					|| ssd.ram.read(*cur) == FAILURE
 					|| ssd.replace(*cur) == FAILURE)
 					return FAILURE;
-				ssd.cache.place_in_cache(*cur, remove);
-			}
-			else
-			{
-				if(ssd.ram.read(*cur) == FAILURE)
-					return FAILURE;
-			}
+			//	ssd.cache.place_in_cache(*cur, remove);
+			//}
+			//else
+			//{
+			//	if(ssd.ram.read(*cur) == FAILURE)
+			//		return FAILURE;
+			//}
 			//printf("READ: %d %d %d %d %d %d %f %f\n", remove, add.package, add.die, add.plane, add.block, add.page, cur->get_start_time(), cur->get_total_time());
 			//fflush(stdout);
 		}

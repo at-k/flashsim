@@ -31,6 +31,7 @@
 #include <queue>
 #include <list>
 #include <map>
+#include <unordered_map>
 #include <time.h>
 #include <boost/multi_index_container.hpp>
 #include <boost/multi_index/identity.hpp>
@@ -830,11 +831,6 @@ struct background_cleaning_blocks
 };
 
 
-struct cache_entry
-{
-	unsigned int address;
-	double entry_time;
-};
 
 class Cache
 {
@@ -845,8 +841,14 @@ public:
 	void place_in_cache(Event &event, bool actual_time);
 private:
 	unsigned int size;
-	std::list<struct cache_entry> cached_addresses;
+	std::unordered_map<unsigned int, double> reverse_map; 
+	std::map<double, unsigned int> actual_cache;
+	std::map<double, unsigned int> future_cache;
+	void place_in_future_cache(Event &event);
+	void process_future(Event &event);
+	void insert(unsigned int address, double time);
 };
+
 
 class FtlImpl_Page : public FtlParent
 {

@@ -67,6 +67,7 @@ FtlImpl_Page_Cache::FtlImpl_Page_Cache(Controller &controller):FtlParent(control
 	}
 	background_events.reserve(BLOCK_SIZE);
 	bg_cleaning_blocks.reserve(PLANE_SIZE);
+	printf("constructor of class\n");
 }
 
 unsigned int FtlImpl_Page_Cache::get_next_block_lba(unsigned int lba)
@@ -787,66 +788,62 @@ enum status FtlImpl_Page_Cache::garbage_collect(Event &event)
 	plane_address.page = 0;
 	plane_address.block = 0;
 	plane_address.valid = PLANE;
-	bool first = true;
 
 	std::list<struct ssd_block>::iterator block_to_erase_pointer = allocated_block_list.end();
 	bool dirty_pages_found = false;
-	for(unsigned int i=0;i<PLANE_SIZE;i++)
-	{
-		bool schedule_writes = false;
-		Address cur_block_address = plane_address;
-		cur_block_address.block = i;
-		cur_block_address.valid = BLOCK;
-		if(cur_block_address == target_block_address)
-			schedule_writes = true;
-		for(iter=allocated_block_list.begin();iter!=allocated_block_list.end();iter++)
-		{
-			if((*iter).physical_address == cur_block_address)
-			{
-				struct ssd_block block_to_clean = *iter;
-				//struct ssd_block cleaning_block = free_block_list.front();
-				//unsigned int page_pointer = 0;
-				Address cur_page_address = block_to_clean.physical_address;
-				for(unsigned int i=0;i<BLOCK_SIZE;i++)
-				{
-					cur_page_address.page = i;
-					cur_page_address.valid = PAGE; 
-					if(cur_page_address == logical_page_list[block_to_clean.page_mapping[i]].physical_address)
-					{
-						struct ftl_event bg_read;
-						bg_read.type = READ;
-						bg_read.physical_address = cur_page_address;
-						bg_read.logical_address = block_to_clean.page_mapping[i];
-						bg_read.start_time = event.get_total_time() - event.get_time_taken();
-						bg_read.end_time = 0;
-						//add_background_event(bg_read);
-						background_events.push_back(bg_read);
-						if(schedule_writes)
-						{
-							struct ftl_event bg_write;
-							bg_write.type = WRITE;
-							bg_write.physical_address = cur_page_address;
-							//bg_write.physical_address.page = page_pointer;
-							//bg_write.physical_address.valid = PAGE;
-							bg_write.logical_address = block_to_clean.page_mapping[i];
-							bg_write.start_time = 0;
-							bg_write.end_time = 0;
-							//add_background_event(bg_write);
-							background_events.push_back(bg_write);
-							//page_pointer += 1;
-						}
-						dirty_pages_found = true;
-					}
-				}
-				if(schedule_writes)
-				{
-					block_to_erase_pointer = iter;
-				}
-				break;
-			}
-		}
 
+	for(iter=allocated_block_list.begin();iter!=allocated_block_list.end();iter++)
+	{
+		Address check_address = iter->physical_address;
+		check_address.block = 0;
+		check_address.page = 0;
+		check_address.valid = PLANE;
+		if(check_address == plane_address)
+		{
+			bool schedule_writes = false;
+			struct ssd_block block_to_clean = *iter;
+			//struct ssd_block cleaning_block = free_block_list.front();
+			//unsigned int page_pointer = 0;
+			Address cur_page_address = block_to_clean.physical_address;
+			if(block_to_clean.physical_address == target_block_address)
+				schedule_writes = true;
+			for(unsigned int i=0;i<BLOCK_SIZE;i++)
+			{
+				cur_page_address.page = i;
+				cur_page_address.valid = PAGE; 
+				if(cur_page_address == logical_page_list[block_to_clean.page_mapping[i]].physical_address)
+				{
+					struct ftl_event bg_read;
+					bg_read.type = READ;
+					bg_read.physical_address = cur_page_address;
+					bg_read.logical_address = block_to_clean.page_mapping[i];
+					bg_read.start_time = event.get_total_time() - event.get_time_taken();
+					bg_read.end_time = 0;
+					//add_background_event(bg_read);
+					background_events.push_back(bg_read);
+					if(schedule_writes)
+					{
+						struct ftl_event bg_write;
+						bg_write.type = WRITE;
+						bg_write.physical_address = cur_page_address;
+						//bg_write.physical_address.page = page_pointer;
+						//bg_write.physical_address.valid = PAGE;
+						bg_write.logical_address = block_to_clean.page_mapping[i];
+						bg_write.start_time = 0;
+						bg_write.end_time = 0;
+						//add_background_event(bg_write);
+						background_events.push_back(bg_write);
+						//page_pointer += 1;
+					}
+					dirty_pages_found = true;
+				}
+			}
+			if(schedule_writes)
+				block_to_erase_pointer = iter;
+		}
 	}
+
+
 	if(block_to_erase_pointer != allocated_block_list.end())
 	{
 		struct ssd_block block_to_erase = *block_to_erase_pointer;
@@ -874,7 +871,8 @@ enum status FtlImpl_Page_Cache::garbage_collect(Event &event)
 
 void FtlImpl_Page_Cache::process_background_tasks(Event &event, bool urgent)
 {
-	//printf("PBT bg size %d\n", background_events.size());
+	if(urgent)
+		printf("PBT urgent\n");
 	double cur_simulated_time = event.get_start_time();
 	if(background_events.size() == 0)
 	{

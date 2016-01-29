@@ -600,12 +600,14 @@ enum status FtlImpl_Page::write(Event &event, bool actual_time)
 		//printf("GC called, free block list size is %d and background cleaning block size is %d\n", free_block_list.size(), bg_cleaning_blocks.size());
 		garbage_collect(event);
 	}
+	/*
 	if(!actual_time)
 	{
 		Address write_address_ = event.get_address();
 		unsigned int plane_num_ = write_address_.package * PACKAGE_SIZE * DIE_SIZE + write_address_.die * DIE_SIZE + write_address_.plane;
 		printf("[DPC] %d\n", plane_num_);
 	}
+	*/
 	return ret_status;
 }
 
@@ -797,10 +799,12 @@ void FtlImpl_Page::process_background_tasks(Event &event, bool urgent)
 		return;
 	//printf("Comparing %f and %f\n", background_events.front().start_time, cur_simulated_time);
 	//printf("processing background tasks\n");
+	/*
 	if(urgent)
 	{
 		printf("[DPC] Urgent processing starts\n");
 	}
+	*/
 	while(background_events.size() > 0 && (urgent || background_events.front().start_time <= cur_simulated_time))
 	{
 		struct ftl_event first_event = background_events.front();
@@ -905,7 +909,7 @@ void FtlImpl_Page::process_background_tasks(Event &event, bool urgent)
 				//printf("background cleaning blocks size is %d after erase and free block list size is %d\n", bg_cleaning_blocks.size(), free_block_list.size());
 				is_erase = true;
 				controller.stats.numErase++;
-				printf("[DPC] Count %d\n", dirty_page_count);
+				//printf("[DPC] Count %d\n", dirty_page_count);
 				dirty_page_count = 0;
 				//printf("[PBT] internal erase time %f\n", task_time);
 			}
