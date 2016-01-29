@@ -839,6 +839,7 @@ public:
 	~Cache();
 	bool present_in_cache(Event &event, bool actual_time);
 	void place_in_cache(Event &event, bool actual_time);
+	void invalidate(Event &event, bool actual_time);
 private:
 	unsigned int size;
 	std::unordered_map<unsigned int, double> reverse_map; 

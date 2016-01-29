@@ -65,7 +65,7 @@ FtlImpl_Page_Cache::FtlImpl_Page_Cache(Controller &controller):FtlParent(control
 	{
 		queue_lengths[i] = 0;
 	}
-	background_events.reserve(BLOCK_SIZE);
+	background_events.reserve(BLOCK_SIZE * PLANE_SIZE * 2);
 	bg_cleaning_blocks.reserve(PLANE_SIZE);
 	printf("constructor of class\n");
 }

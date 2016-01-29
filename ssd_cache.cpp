@@ -43,31 +43,28 @@ void Cache::insert(unsigned int logical_add, double time)
 	}
 	actual_cache[time] = logical_add;
 	reverse_map[logical_add] = time;
-	/*
-	actual_cached_addresses.push_back();
-	if(actual_time && present_in_cache(event, actual_time))
-		return;
-	struct cache_entry new_cache_entry;
-	new_cache_entry.address = event.get_logical_address();
-	new_cache_entry.entry_time = event.get_total_time();
-	std::list<struct cache_entry>::iterator iter, pointer, last;
-	last = cached_addresses.end();
-	for(iter=cached_addresses.begin();iter!=last;iter++)
+	while(actual_cache.size() > size)
 	{
-		if((*iter).entry_time > event.get_total_time())
-			break;
+		std::map<double, unsigned int>::iterator lru;
+		lru = actual_cache.begin();
+		reverse_map.erase(lru->second);
+		actual_cache.erase(lru);
 	}
-	pointer = cached_addresses.insert(iter, new_cache_entry);
+}
+
+void Cache::invalidate(Event &event, bool actual_time)
+{
+	unsigned int logical_add = event.get_logical_address();
 	if(actual_time)
 	{
-		unsigned int num_elements = std::distance(cached_addresses.begin(), pointer) + 1;
-		while(num_elements > size)
+		std::unordered_map<unsigned int, double>::iterator iter;
+		iter = reverse_map.find(logical_add);
+		if(iter != reverse_map.end())
 		{
-			cached_addresses.pop_front();
-			num_elements--;
+			actual_cache.erase(iter->second);
+			reverse_map.erase(iter);
 		}
 	}
-	*/
 }
 
 void Cache::process_future(Event &event)

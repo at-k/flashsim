@@ -571,7 +571,7 @@ void Plane::serialize_access(double start_time, double duration, Event &event, b
 					printf("UNKNOWN ");
 					break;
 			}
-			printf("Duration: %f Start %f End %f \n", it->unlock_time - last_time, it->lock_time, it->unlock_time);
+			printf("Last Time: %f Duration: %f Start %f End %f \n", last_time, it->unlock_time - last_time, it->lock_time, it->unlock_time);
 			last_time = it->unlock_time;
 		}
 
@@ -579,6 +579,7 @@ void Plane::serialize_access(double start_time, double duration, Event &event, b
 		printf("=====================================================\n");
 	}
 	*/
+
 
 	/* write scheduling info in free table slot */
 	lock_times lt;
