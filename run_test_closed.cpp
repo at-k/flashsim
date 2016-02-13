@@ -50,7 +50,7 @@ int main(int argc, char **argv)
 	bool write_data;
 	unsigned int req_per_thread = 1000;
 	
-	unsigned int total_read_count = 400000, cur_read_count = 0;
+	unsigned int total_read_count = 1000000, cur_read_count = 0;
 
 	int read_loc = 0;
 	int write_loc = 0;
@@ -81,7 +81,7 @@ int main(int argc, char **argv)
 	strcat(read_file_name, argv[2]);
 	strcat(read_file_name, "_");
 	strcat(read_file_name, argv[3]);
-	strcat(read_file_name, ".out");
+	strcat(read_file_name, "__.out");
 
 	strcat(write_file_name, "closed_write_");
 	strcat(write_file_name, ftl_implementation);
@@ -91,7 +91,7 @@ int main(int argc, char **argv)
 	strcat(write_file_name, argv[2]);
 	strcat(write_file_name, "_");
 	strcat(write_file_name, argv[3]);
-	strcat(write_file_name, ".out");
+	strcat(write_file_name, "__.out");
 
 	read_file = fopen(read_file_name, "w");
 	write_file = fopen(write_file_name, "w");
@@ -204,7 +204,9 @@ int main(int argc, char **argv)
 			location = rand()%lastLBA;
 			//location = (write_loc+1)%lastLBA;
 			addresses.insert(location);
+			//printf("[APP WRITE] 1 %f\n", next_request_time);
 			result = ssd->event_arrive(WRITE, location, 1, (double) next_request_time);
+			//printf("[APP WRITE COMPLETE] %f\n", next_request_time + result);
 			if(result == -1)
 			{
 				fprintf(read_file, "==========\nCould not do a write, incomplete experiment\n");
@@ -223,7 +225,9 @@ int main(int argc, char **argv)
 				location = rand()%lastLBA;
 			}
 			cur_read_count++;	
+			//printf("[APP READ] 1 %f\n", next_request_time);
 			result = ssd->event_arrive(READ, location, 1, (double) next_request_time);
+			//printf("[APP READ COMPLETE] %f\n", next_request_time + result);
 			if(result == -1)	
 			{
 				fprintf(read_file, "==========\nCould not do a read, incomplete experiment\n");

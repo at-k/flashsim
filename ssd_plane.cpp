@@ -547,9 +547,9 @@ void Plane::serialize_access(double start_time, double duration, Event &event, b
 		}
 	}
 
-
-	/*
-	if(event.get_event_type() == READ)
+	
+	/*	
+	if(event.get_event_type() == READ && remove)
 	{
 		printf("Waits on plane for read of duration %f\n", duration);
 		double last_time = start_time;

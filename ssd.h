@@ -823,7 +823,6 @@ struct ftl_event
 	double end_time;
 };
 
-
 struct background_cleaning_blocks
 {
 	struct ssd_block block_to_clean;
@@ -867,10 +866,11 @@ private:
 	Address log_write_address;
 	std::list<struct ssd_block> free_block_list;
 	std::list<struct ssd_block> allocated_block_list;
-	std::vector<struct ftl_event> open_events;
+	std::list<struct ssd_block> filled_block_list;
+	std::vector< std::vector<struct ftl_event> >open_events;
 	unsigned int *queue_lengths;
-	std::vector<struct ftl_event> background_events;
-	std::vector<struct ssd_block> bg_cleaning_blocks;
+	std::vector< std::vector<struct ftl_event> >background_events;
+	std::vector< std::vector<struct ssd_block> >bg_cleaning_blocks;
 	unsigned int clean_threshold;
 	double get_average_age(struct ssd_block block);
 	Address translate_lba_pba(unsigned int lba);
@@ -878,7 +878,7 @@ private:
 	unsigned int get_page_number_in_block(unsigned int lba);
 	unsigned int get_block_starting_lba(unsigned int lba);
 	unsigned int get_logical_block_num(unsigned int lba);
-	Address find_write_location(Address cur, bool *already_open);
+	Address find_write_location(Event &event, Address cur, bool *already_open);
 	bool increment_log_write_address(Event &event, bool *gc_required, bool bg_write);
 	bool allocate_new_block(Address requested_address, Event &event, bool *gc_required, bool bg_write);
 	unsigned int get_next_block_lba(unsigned int lba);
@@ -889,170 +889,9 @@ private:
 	void add_background_event(struct ftl_event event);
 	void process_background_tasks(Event &event, bool urgent);
 	void process_open_events_table(Event event);
+	void populate_queue_len(double time, unsigned int plane_num);
 };
 
-class FtlImpl_Page_PC : public FtlParent
-{
-public:
-	FtlImpl_Page_PC(Controller &controller);
-	~FtlImpl_Page_PC();
-	enum status read(Event &event, bool actual_time = true);
-	enum status write(Event &event, bool actual_time = true);
-	enum status trim(Event &event);
-	void get_min_max_erases();
-private:
-	unsigned int latest_write_time;
-	struct logical_page *logical_page_list;
-	unsigned int RAW_SSD_BLOCKS, ADDRESSABLE_SSD_PAGES;
-	Address log_write_address;
-	std::list<struct ssd_block> free_block_list;
-	std::list<struct ssd_block> allocated_block_list;
-	std::vector<struct ftl_event> open_events;
-	unsigned int *queue_lengths;
-	std::vector<struct ftl_event> background_events;
-	std::vector<struct ssd_block> bg_cleaning_blocks;
-	unsigned int clean_threshold;
-	double get_average_age(struct ssd_block block);
-	Address translate_lba_pba(unsigned int lba);
-	unsigned int translate_pba_lba(Address pba);
-	unsigned int get_page_number_in_block(unsigned int lba);
-	unsigned int get_block_starting_lba(unsigned int lba);
-	unsigned int get_logical_block_num(unsigned int lba);
-	Address find_write_location(Address cur, bool *already_open);
-	bool increment_log_write_address(Event &event, bool *gc_required, bool bg_write);
-	bool allocate_new_block(Address requested_address, Event &event, bool *gc_required, bool bg_write);
-	unsigned int get_next_block_lba(unsigned int lba);
-	Address get_next_block_pba(Address pba);
-	enum status garbage_collect(Event &event);
-	double age_variance_limit;
-	void add_event(Event event);
-	void add_background_event(struct ftl_event event);
-	void process_background_tasks(Event &event, bool urgent);
-	void process_open_events_table(Event event);
-};
-/*
-class FtlImpl_Page_PC : public FtlParent
-{
-public:
-	FtlImpl_Page_PC(Controller &controller);
-	~FtlImpl_Page_PC();
-	enum status read(Event &event, bool actual_time = true);
-	enum status write(Event &event, bool actual_time = true);
-	enum status trim(Event &event);
-	void get_min_max_erases();
-private:
-	unsigned int latest_write_time;
-	struct logical_page *logical_page_list;
-	unsigned int RAW_SSD_BLOCKS, ADDRESSABLE_SSD_PAGES;
-	Address log_write_address;
-	std::list<struct ssd_block> free_block_list;
-	std::list<struct ssd_block> allocated_block_list;
-	std::vector<struct ftl_event> open_events;
-	unsigned int *queue_lengths;
-	std::vector<struct ftl_event> background_events;
-	std::vector<struct background_cleaning_blocks> bg_cleaning_blocks;
-	unsigned int clean_threshold;
-	double get_average_age(struct ssd_block block);
-	Address translate_lba_pba(unsigned int lba);
-	unsigned int translate_pba_lba(Address pba);
-	unsigned int get_page_number_in_block(unsigned int lba);
-	unsigned int get_block_starting_lba(unsigned int lba);
-	unsigned int get_logical_block_num(unsigned int lba);
-	Address find_write_location(Address cur, bool *already_open);
-	bool increment_log_write_address(Event &event, bool *gc_required);
-	bool allocate_new_block(Address requested_address, Event &event, bool *gc_required);
-	unsigned int get_next_block_lba(unsigned int lba);
-	Address get_next_block_pba(Address pba);
-	enum status garbage_collect(Event &event);
-	double age_variance_limit;
-	void add_event(Event event);
-	void add_background_event(struct ftl_event event);
-	void process_background_tasks(Event &event, bool urgent);
-	void process_open_events_table(Event event);
-};
-*/
-
-
-class FtlImpl_Page_Cache: public FtlParent
-{
-public:
-	FtlImpl_Page_Cache(Controller &controller);
-	~FtlImpl_Page_Cache();
-	enum status read(Event &event, bool actual_time = true);
-	enum status write(Event &event, bool actual_time = true);
-	enum status trim(Event &event);
-	void get_min_max_erases();
-private:
-	unsigned int latest_write_time;
-	struct logical_page *logical_page_list;
-	unsigned int RAW_SSD_BLOCKS, ADDRESSABLE_SSD_PAGES;
-	Address log_write_address;
-	std::list<struct ssd_block> free_block_list;
-	std::list<struct ssd_block> allocated_block_list;
-	std::vector<struct ftl_event> open_events;
-	unsigned int *queue_lengths;
-	std::vector<struct ftl_event> background_events;
-	std::vector<struct ssd_block> bg_cleaning_blocks;
-	unsigned int clean_threshold;
-	double get_average_age(struct ssd_block block);
-	Address translate_lba_pba(unsigned int lba);
-	unsigned int translate_pba_lba(Address pba);
-	unsigned int get_page_number_in_block(unsigned int lba);
-	unsigned int get_block_starting_lba(unsigned int lba);
-	unsigned int get_logical_block_num(unsigned int lba);
-	Address find_write_location(Address cur, bool *already_open);
-	bool increment_log_write_address(Event &event, bool *gc_required, bool bg_write);
-	bool allocate_new_block(Address requested_address, Event &event, bool *gc_required, bool bg_write);
-	unsigned int get_next_block_lba(unsigned int lba);
-	Address get_next_block_pba(Address pba);
-	enum status garbage_collect(Event &event);
-	double age_variance_limit;
-	void add_event(Event event);
-	void add_background_event(struct ftl_event event);
-	void process_background_tasks(Event &event, bool urgent);
-	void process_open_events_table(Event event);
-};
-/*
-class FtlImpl_Page_Cache : public FtlParent
-{
-public:
-	FtlImpl_Page_Cache(Controller &controller);
-	~FtlImpl_Page_Cache();
-	enum status read(Event &event, bool actual_time = true);
-	enum status write(Event &event, bool actual_time = true);
-	enum status trim(Event &event);
-	void get_min_max_erases();
-private:
-	unsigned int latest_write_time;
-	struct logical_page *logical_page_list;
-	unsigned int RAW_SSD_BLOCKS, ADDRESSABLE_SSD_PAGES;
-	Address log_write_address;
-	std::list<struct ssd_block> free_block_list;
-	std::list<struct ssd_block> allocated_block_list;
-	std::vector<struct ftl_event> open_events;
-	unsigned int *queue_lengths;
-	std::vector<struct ftl_event> background_events;
-	std::vector<struct background_cleaning_blocks> bg_cleaning_blocks;
-	unsigned int clean_threshold;
-	double get_average_age(struct ssd_block block);
-	Address translate_lba_pba(unsigned int lba);
-	unsigned int translate_pba_lba(Address pba);
-	unsigned int get_page_number_in_block(unsigned int lba);
-	unsigned int get_block_starting_lba(unsigned int lba);
-	unsigned int get_logical_block_num(unsigned int lba);
-	Address find_write_location(Address cur, bool *already_open);
-	bool increment_log_write_address(Event &event, bool *gc_required);
-	bool allocate_new_block(Address requested_address, Event &event, bool *gc_required);
-	unsigned int get_next_block_lba(unsigned int lba);
-	Address get_next_block_pba(Address pba);
-	enum status garbage_collect(Event &event);
-	double age_variance_limit;
-	void add_event(Event event);
-	void add_background_event(struct ftl_event event);
-	void process_background_tasks(Event &event, bool urgent);
-	void process_open_events_table(Event event);
-};
-*/
 class FtlImpl_Fast : public FtlParent
 {
 public:
