@@ -57,9 +57,9 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller):FtlParent(controller)
 	}
 	clean_threshold = float(OVERPROVISIONING)/100 * SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * PLANE_SIZE;
 	age_variance_limit = 1;	
-	open_events.reserve(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE);
-	background_events.reserve(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE);
-	bg_cleaning_blocks.reserve(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE);
+	open_events = std::vector<std::vector<struct ftl_event> >(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE);
+	background_events = std::vector<std::vector<struct ftl_event> >(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE);
+	bg_cleaning_blocks = std::vector<std::vector<struct ssd_block> >(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE);
 	queue_lengths = (unsigned int *)malloc(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * sizeof(unsigned int));
 	for(unsigned int i=0;i<SSD_SIZE * PACKAGE_SIZE * DIE_SIZE;i++)
 	{
@@ -222,6 +222,7 @@ Address FtlImpl_Page::find_write_location(Event &event, Address cur, bool *alrea
 	{
 		queue_len_computed[i] = false;
 	}
+	printf("Allocated %d, Filled %d, BG %d, Free %d\n", allocated_block_list.size(), filled_block_list.size(), bg_cleaning_blocks.size(), free_block_list.size());
 	for(iter=allocated_block_list.begin();iter!=allocated_block_list.end();)
 	{
 		if((*iter).last_page_written == BLOCK_SIZE - 1)
@@ -438,6 +439,11 @@ bool FtlImpl_Page::allocate_new_block(Address requested_address, Event &event, b
 	return ret_val;
 }
 
+bool compare_ftl_event_start_times(const struct ftl_event a, const struct ftl_event b) 
+{
+	return a.start_time < b.start_time;
+}
+
 void FtlImpl_Page::add_event(Event event)
 {
 	struct ftl_event new_event;
@@ -447,7 +453,7 @@ void FtlImpl_Page::add_event(Event event)
 	new_event.start_time = event.get_start_time();
 	new_event.end_time = event.get_total_time();
 	unsigned int plane_num = new_event.physical_address.package*PACKAGE_SIZE*DIE_SIZE + new_event.physical_address.die*DIE_SIZE + new_event.physical_address.plane;
-	open_events[plane_num].push_back(new_event);
+	open_events[plane_num].insert(std::upper_bound(open_events[plane_num].begin(), open_events[plane_num].end(), new_event, compare_ftl_event_start_times), new_event);;
 }
 
 void FtlImpl_Page::process_open_events_table(Event event)
@@ -465,6 +471,7 @@ void FtlImpl_Page::process_open_events_table(Event event)
 		else
 		{
 			iter++;
+			break;
 		}
 	}
 }
@@ -653,7 +660,27 @@ enum status FtlImpl_Page::trim(Event &event)
 	return SUCCESS;
 }
 
+
 enum status FtlImpl_Page::garbage_collect(Event &event)
+{
+	enum status ret_status;
+	switch(GC_SCHEME)
+	{
+		case(0):
+			ret_status = garbage_collect_default(event);
+			break;
+		case(1):
+			ret_status = garbage_collect_cached(event);
+			break;
+		default:
+			ret_status = garbage_collect_default(event);
+			break;
+	}
+	return ret_status;
+}
+
+
+enum status FtlImpl_Page::garbage_collect_default(Event &event)
 {
 	std::list<struct ssd_block>::iterator iter;
 	std::list<struct ssd_block>::iterator max_benefit_block_reference = filled_block_list.end();
@@ -738,6 +765,7 @@ enum status FtlImpl_Page::garbage_collect(Event &event)
 		printf("cleaning is not possible\n");
 		return FAILURE;
 	} 
+
 	struct ssd_block block_to_clean = *max_benefit_block_reference;
 	Address cur_page_address = block_to_clean.physical_address;
 	unsigned int plane_num = cur_page_address.package*PACKAGE_SIZE*DIE_SIZE + cur_page_address.die*DIE_SIZE + cur_page_address.plane;
@@ -752,7 +780,7 @@ enum status FtlImpl_Page::garbage_collect(Event &event)
 			bg_read.type = READ;
 			bg_read.physical_address = cur_page_address;
 			bg_read.logical_address = block_to_clean.page_mapping[i];
-			bg_read.start_time = event.get_total_time() - event.get_time_taken();
+			bg_read.start_time = event.get_start_time();
 			bg_read.end_time = 0;
 			background_events[plane_num].push_back(bg_read);
 			struct ftl_event bg_write;
@@ -772,15 +800,201 @@ enum status FtlImpl_Page::garbage_collect(Event &event)
 	if(clean_pages_found)
 		bg_erase.start_time = 0;
 	else
-		bg_erase.start_time = event.get_total_time() - event.get_time_taken();
+		bg_erase.start_time = event.get_start_time();
 	bg_erase.end_time = 0;
 
 	background_events[plane_num].push_back(bg_erase);
-	
 	filled_block_list.erase(max_benefit_block_reference);
 	bg_cleaning_blocks[plane_num].push_back(block_to_clean);
 	return SUCCESS;
 }
+
+
+enum status FtlImpl_Page::garbage_collect_cached(Event &event)
+{
+	printf("GC called\n");
+	std::list<struct ssd_block>::iterator iter;
+	std::list<struct ssd_block>::iterator max_benefit_block_reference = filled_block_list.end();
+	float max_benefit = 0, cur_benefit;
+	bool cleaning_possible = false;
+	/*
+	double average_lifetime_left = 0, min_lifetime_left = -1, max_lifetime_left = -1;
+	for(iter=allocated_block_list.begin();iter!=allocated_block_list.end();iter++)
+	{
+		average_lifetime_left += (double)iter->lifetime_left;
+		if(iter->lifetime_left < min_lifetime_left || min_lifetime_left == -1)
+			min_lifetime_left = iter->lifetime_left;
+		if(iter->lifetime_left > max_lifetime_left || max_lifetime_left == -1)
+			max_lifetime_left = iter->lifetime_left;
+	}
+	for(iter=free_block_list.begin();iter!=free_block_list.end();iter++)
+	{
+		average_lifetime_left += (double)iter->lifetime_left;
+		if(iter->lifetime_left < min_lifetime_left || min_lifetime_left == -1)
+			min_lifetime_left = iter->lifetime_left;
+		if(iter->lifetime_left > max_lifetime_left || max_lifetime_left == -1)
+			max_lifetime_left = iter->lifetime_left;
+	}
+	for(iter=filled_block_list.begin();iter!=filled_block_list.end();iter++)
+	{
+		average_lifetime_left += (double)iter->lifetime_left;
+		if(iter->lifetime_left < min_lifetime_left || min_lifetime_left == -1)
+			min_lifetime_left = iter->lifetime_left;
+		if(iter->lifetime_left > max_lifetime_left || max_lifetime_left == -1)
+			max_lifetime_left = iter->lifetime_left;
+	}
+	average_lifetime_left = average_lifetime_left/(double)(RAW_SSD_BLOCKS);
+	*/
+	
+	for(iter=allocated_block_list.begin();iter!=allocated_block_list.end();)
+	{
+		if(iter->last_page_written == BLOCK_SIZE - 1)
+		{
+			struct ssd_block filled_block;
+			filled_block.physical_address = iter->physical_address;
+			filled_block.last_write_time = iter->last_write_time;
+			filled_block.valid_page_count = iter->valid_page_count;
+			filled_block.lifetime_left = iter->lifetime_left;
+			filled_block.last_page_written = iter->last_page_written;
+			filled_block.page_mapping = (unsigned int *)malloc(BLOCK_SIZE * sizeof(unsigned int));
+			for(unsigned int k=0;k<BLOCK_SIZE;k++)
+			{
+				filled_block.page_mapping[k] = (iter->page_mapping)[k];
+			}
+			filled_block_list.push_back(filled_block);
+			iter = allocated_block_list.erase(iter);
+			continue;
+		}
+		else
+		{
+			iter++;
+		}
+	}
+	
+	for(iter=filled_block_list.begin();iter!=filled_block_list.end();iter++)
+	{
+		float utilization = (float)iter->valid_page_count/(float)BLOCK_SIZE;
+		if(iter->valid_page_count == BLOCK_SIZE)
+		{
+			continue;
+		}
+		double age = get_average_age(*iter);
+		cur_benefit = (1.0 - utilization)*(float)age / (1.0 + utilization);
+		if(iter->lifetime_left == 0)
+		{
+			continue;  
+		}
+		if(cur_benefit > 0 && (max_benefit == 0 || cur_benefit > max_benefit)) //&& rand()/RAND_MAX >= probab_to_skip)
+		{
+			max_benefit = cur_benefit;
+			max_benefit_block_reference = iter; 
+			cleaning_possible = true;
+		}    
+	}
+	if(!cleaning_possible)
+	{
+		printf("cleaning is not possible\n");
+		return FAILURE;
+	} 
+
+	struct ssd_block target_block = *max_benefit_block_reference;
+	Address target_block_address = target_block.physical_address;
+	unsigned int target_plane = target_block_address.package*PACKAGE_SIZE*DIE_SIZE + target_block_address.die*DIE_SIZE + target_block_address.plane;
+	std::list<struct ssd_block>::iterator target_block_iterator;
+
+	bool clean_pages_found = false;
+	for(iter = allocated_block_list.begin();iter!=allocated_block_list.end();iter++)
+	{
+		Address iter_address = iter->physical_address;
+		if( iter->physical_address.package == target_block_address.package && 
+			iter->physical_address.die == target_block_address.die &&
+			iter->physical_address.plane == target_block_address.plane
+			)
+		{
+			Address cur_page_address = iter->physical_address;
+			cur_page_address.valid = PAGE;
+			for(unsigned int i=0;i<BLOCK_SIZE;i++)
+			{
+				cur_page_address.page = i;
+				if(cur_page_address == logical_page_list[(iter->page_mapping)[i]].physical_address)
+				{
+					struct ftl_event bg_read;
+					bg_read.type = READ;
+					bg_read.physical_address = cur_page_address;
+					bg_read.logical_address = (iter->page_mapping)[i];
+					bg_read.start_time = event.get_start_time();
+					bg_read.end_time = 0;
+					background_events[target_plane].push_back(bg_read);
+					clean_pages_found = true;
+				}
+			}
+		}
+	}
+
+
+	for(iter = filled_block_list.begin();iter!=filled_block_list.end();iter++)
+	{
+		bool schedule_writes = false;
+		Address iter_address = iter->physical_address;
+		if( iter->physical_address.package == target_block_address.package && 
+			iter->physical_address.die == target_block_address.die &&
+			iter->physical_address.plane == target_block_address.plane
+			)
+		{
+			if(iter->physical_address.block == target_block_address.block)
+			{
+				target_block_iterator = iter;
+				schedule_writes = true;
+			}
+			Address cur_page_address = iter->physical_address;
+			cur_page_address.valid = PAGE;
+			for(unsigned int i=0;i<BLOCK_SIZE;i++)
+			{
+				cur_page_address.page = i;
+				if(cur_page_address == logical_page_list[(iter->page_mapping)[i]].physical_address)
+				{
+					struct ftl_event bg_read;
+					bg_read.type = READ;
+					bg_read.physical_address = cur_page_address;
+					bg_read.logical_address = (iter->page_mapping)[i];
+					bg_read.start_time = event.get_start_time();
+					bg_read.end_time = 0;
+					background_events[target_plane].push_back(bg_read);
+					if(schedule_writes)
+					{
+						struct ftl_event bg_write;
+						bg_write.type = WRITE;
+						bg_write.physical_address = cur_page_address;
+						bg_write.logical_address = (iter->page_mapping)[i];
+						bg_write.start_time = 0;
+						bg_write.end_time = 0;
+						background_events[target_plane].push_back(bg_write);
+					}
+					clean_pages_found = true;
+				}
+			}
+		}
+	}
+
+	struct ftl_event bg_erase;
+	bg_erase.type = ERASE;
+	bg_erase.physical_address = target_block_address;
+	bg_erase.logical_address = translate_pba_lba(target_block_address);
+	if(clean_pages_found)
+		bg_erase.start_time = 0;
+	else
+		bg_erase.start_time = event.get_start_time();
+	bg_erase.end_time = 0;
+
+	background_events[target_plane].push_back(bg_erase);
+	filled_block_list.erase(max_benefit_block_reference);
+	bg_cleaning_blocks[target_plane].push_back(target_block);
+	printf("pushed to bg events\n");	
+	printf("pushed to bg_cleaning_blocks\n");
+	return SUCCESS;
+
+}
+
 
 void FtlImpl_Page::process_background_tasks(Event &event, bool urgent)
 {
@@ -788,16 +1002,21 @@ void FtlImpl_Page::process_background_tasks(Event &event, bool urgent)
 	if(free_block_list.size() == 0)
 	{
 		urgent = true;
+		printf("URGENT\n");
 	}
 	bool open_events_processed[SSD_SIZE*PACKAGE_SIZE*DIE_SIZE];
 	for(unsigned int k=0;k<SSD_SIZE*PACKAGE_SIZE*DIE_SIZE;k++)
 	{
 		open_events_processed[k] = false;
 	}
+	Address event_address = event.get_address();
+	unsigned int event_plane = event_address.package*PACKAGE_SIZE*DIE_SIZE + event_address.die*DIE_SIZE + event_address.plane;
+	open_events_processed[event_plane] = true;
 	double earliest_possible_start = -1;
 	unsigned int earliest_possible_start_plane;
 	for(unsigned int plane_num=0;plane_num<SSD_SIZE*PACKAGE_SIZE*DIE_SIZE;plane_num++)
 	{
+		printf("PBT %d %d\n", plane_num, background_events[plane_num].size());
 		if(background_events[plane_num].size() == 0)
 		{
 			continue;
@@ -908,6 +1127,7 @@ void FtlImpl_Page::process_background_tasks(Event &event, bool urgent)
 			{
 				if(urgent)
 				{
+					printf("%d %f %f\n", plane_num, earliest_possible_start, background_events[plane_num].front().start_time);
 					if( earliest_possible_start == -1 || 
 						earliest_possible_start > background_events[plane_num].front().start_time)
 					{
@@ -986,6 +1206,10 @@ void FtlImpl_Page::populate_queue_len(double time, unsigned int plane_num)
 		if( (*iter).start_time <= time && (*iter).end_time > time)
 		{
 			queue_lengths[plane_num]++;
+		}
+		else if ((*iter).start_time > time)
+		{
+			break;
 		}
 	}
 }

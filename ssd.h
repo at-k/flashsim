@@ -142,6 +142,7 @@ extern const uint MAP_DIRECTORY_SIZE;
  */
 extern const uint FTL_IMPLEMENTATION;
 
+extern const uint GC_SCHEME;
 
 /*
  * LOG page limit for FAST.
@@ -247,8 +248,6 @@ class Wear_Leveler;
 class Block_manager;
 class FtlParent;
 class FtlImpl_Page;
-class FtlImpl_Page_PC;
-class FtlImpl_Page_Cache;
 class FtlImpl_Fast;
 
 class Ram;
@@ -884,12 +883,15 @@ private:
 	unsigned int get_next_block_lba(unsigned int lba);
 	Address get_next_block_pba(Address pba);
 	enum status garbage_collect(Event &event);
+	enum status garbage_collect_default(Event &event);
+	enum status garbage_collect_cached(Event &event);
 	double age_variance_limit;
 	void add_event(Event event);
 	void add_background_event(struct ftl_event event);
 	void process_background_tasks(Event &event, bool urgent);
 	void process_open_events_table(Event event);
 	void populate_queue_len(double time, unsigned int plane_num);
+	//bool compare_ftl_event_start_times(const struct ftl_event a, const struct ftl_event b);
 };
 
 class FtlImpl_Fast : public FtlParent
@@ -967,8 +969,6 @@ public:
 	friend class FtlImpl_Page;
 	friend class FtlImpl_Fast;
 	friend class Block_manager;
-	friend class FtlImpl_Page_PC;
-	friend class FtlImpl_Page_Cache;
 
 	Stats stats;
 	void print_ftl_statistics(FILE *fp);

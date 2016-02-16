@@ -137,6 +137,8 @@ uint MAP_DIRECTORY_SIZE = 0;
  */
 uint FTL_IMPLEMENTATION = 0;
 
+uint GC_SCHEME = 0;
+
 /*
  * Limit of LOG pages (for use in BAST)
  */
@@ -216,8 +218,6 @@ void load_entry(char *name, double value, uint line_number) {
 		PAGE_WRITE_DELAY = value;
 	else if (!strcmp(name, "PAGE_SIZE"))
 		PAGE_SIZE = value;
-	else if (!strcmp(name, "FTL_IMPLEMENTATION"))
-		FTL_IMPLEMENTATION = value;
 	else if (!strcmp(name, "PAGE_ENABLE_DATA"))
 		PAGE_ENABLE_DATA = (value == 1);
 	else if (!strcmp(name, "MAP_DIRECTORY_SIZE"))
@@ -242,6 +242,8 @@ void load_entry(char *name, double value, uint line_number) {
 		OVERPROVISIONING = value;
 	else if (!strcmp(name, "CACHE_SIZE"))
 		CACHE_SIZE = value;
+	else if (!strcmp(name, "GC_SCHEME"))
+		GC_SCHEME = value;
 	else
 		fprintf(stderr, "Config file parsing error on line %u\n", line_number);
 	return;
@@ -314,6 +316,7 @@ void print_config(FILE *stream) {
 	fprintf(stream, "PAGE_ENABLE_DATA: %i\n", PAGE_ENABLE_DATA);
 	fprintf(stream, "MAP_DIRECTORY_SIZE: %i\n", MAP_DIRECTORY_SIZE);
 	fprintf(stream, "FTL_IMPLEMENTATION: %i\n", FTL_IMPLEMENTATION);
+	fprintf(stream, "GC_SCHEME: %i\n", GC_SCHEME);
 	fprintf(stream, "PARALLELISM_MODE: %i\n", PARALLELISM_MODE);
 	fprintf(stream, "RAID_NUMBER_OF_PHYSICAL_SSDS: %i\n", RAID_NUMBER_OF_PHYSICAL_SSDS);
 

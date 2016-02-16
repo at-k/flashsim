@@ -67,6 +67,7 @@ int main(int argc, char **argv)
 	q_depth = atoi(argv[3]);
 
 	char ftl_implementation[10] = {'0' + FTL_IMPLEMENTATION};
+	char gc_scheme[10] = {'0' + GC_SCHEME};
 
 
 	printf("addressable blocks %d\n", NUMBER_OF_ADDRESSABLE_BLOCKS);
@@ -76,22 +77,26 @@ int main(int argc, char **argv)
 	strcat(read_file_name, "closed_read_");
 	strcat(read_file_name, ftl_implementation);
 	strcat(read_file_name, "_");
+	strcat(read_file_name, gc_scheme);
+	strcat(read_file_name, "_");
 	strcat(read_file_name, argv[1]);
 	strcat(read_file_name, "_");
 	strcat(read_file_name, argv[2]);
 	strcat(read_file_name, "_");
 	strcat(read_file_name, argv[3]);
-	strcat(read_file_name, "__.out");
+	strcat(read_file_name, ".out");
 
 	strcat(write_file_name, "closed_write_");
 	strcat(write_file_name, ftl_implementation);
+	strcat(write_file_name, "_");
+	strcat(write_file_name, gc_scheme);
 	strcat(write_file_name, "_");
 	strcat(write_file_name, argv[1]);
 	strcat(write_file_name, "_");
 	strcat(write_file_name, argv[2]);
 	strcat(write_file_name, "_");
 	strcat(write_file_name, argv[3]);
-	strcat(write_file_name, "__.out");
+	strcat(write_file_name, ".out");
 
 	read_file = fopen(read_file_name, "w");
 	write_file = fopen(write_file_name, "w");
@@ -102,7 +107,10 @@ int main(int argc, char **argv)
 	{
 		double result = ssd -> event_arrive(WRITE, i%lastLBA, 1, (double) i*1000);
 		if(result == -1)
+		{
+			printf("returning failure\n");
 			return -1;
+		}
 		addresses.insert(i);
 	}
 	initial_delay = i*1000;
