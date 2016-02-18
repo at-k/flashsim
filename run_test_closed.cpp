@@ -50,7 +50,7 @@ int main(int argc, char **argv)
 	bool write_data;
 	unsigned int req_per_thread = 1000;
 	
-	unsigned int total_read_count = 1000000, cur_read_count = 0;
+	unsigned int total_read_count = 500000, cur_read_count = 0;
 
 	int read_loc = 0;
 	int write_loc = 0;
@@ -97,6 +97,7 @@ int main(int argc, char **argv)
 	strcat(write_file_name, "_");
 	strcat(write_file_name, argv[3]);
 	strcat(write_file_name, ".out");
+
 
 	read_file = fopen(read_file_name, "w");
 	write_file = fopen(write_file_name, "w");

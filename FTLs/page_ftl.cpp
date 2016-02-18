@@ -25,6 +25,10 @@
 #include <math.h>
 #include "../ssd.h"
 
+unsigned int costly_counter = 0;
+unsigned int urgent_counter = 0;
+unsigned int skip_count = 0;
+
 using namespace ssd;
 
 FtlImpl_Page::FtlImpl_Page(Controller &controller):FtlParent(controller)
@@ -222,7 +226,6 @@ Address FtlImpl_Page::find_write_location(Event &event, Address cur, bool *alrea
 	{
 		queue_len_computed[i] = false;
 	}
-	printf("Allocated %d, Filled %d, BG %d, Free %d\n", allocated_block_list.size(), filled_block_list.size(), bg_cleaning_blocks.size(), free_block_list.size());
 	for(iter=allocated_block_list.begin();iter!=allocated_block_list.end();)
 	{
 		if((*iter).last_page_written == BLOCK_SIZE - 1)
@@ -453,7 +456,7 @@ void FtlImpl_Page::add_event(Event event)
 	new_event.start_time = event.get_start_time();
 	new_event.end_time = event.get_total_time();
 	unsigned int plane_num = new_event.physical_address.package*PACKAGE_SIZE*DIE_SIZE + new_event.physical_address.die*DIE_SIZE + new_event.physical_address.plane;
-	open_events[plane_num].insert(std::upper_bound(open_events[plane_num].begin(), open_events[plane_num].end(), new_event, compare_ftl_event_start_times), new_event);;
+	open_events[plane_num].insert(std::upper_bound(open_events[plane_num].begin(), open_events[plane_num].end(), new_event, compare_ftl_event_start_times), new_event);
 }
 
 void FtlImpl_Page::process_open_events_table(Event event)
@@ -530,6 +533,9 @@ void FtlImpl_Page::get_min_max_erases()
 	}
 	controller.stats.minErase = min_erases;
 	controller.stats.maxErase = max_erases;
+	printf("Costly Counter %d\n", costly_counter);
+	printf("Urgent Counter %d\n", urgent_counter);
+	printf("Skip Count %d\n", skip_count);
 }
 FtlImpl_Page::~FtlImpl_Page(void)
 {
@@ -651,6 +657,8 @@ enum status FtlImpl_Page::write(Event &event, bool actual_time)
 		if(free_block_list.size() == 0)
 			process_background_tasks(event, true);
 	}
+	if(!actual_time && gc_required)
+		printf("Non application write caused an GC\n");
 	return ret_status;
 }
 
@@ -751,6 +759,7 @@ enum status FtlImpl_Page::garbage_collect_default(Event &event)
 		cur_benefit = (1.0 - utilization)*(float)age / (1.0 + utilization);
 		if(iter->lifetime_left == 0)
 		{
+			printf("This is the problem\n");
 			continue;  
 		}
 		if(cur_benefit > 0 && (max_benefit == 0 || cur_benefit > max_benefit)) //&& rand()/RAND_MAX >= probab_to_skip)
@@ -812,7 +821,6 @@ enum status FtlImpl_Page::garbage_collect_default(Event &event)
 
 enum status FtlImpl_Page::garbage_collect_cached(Event &event)
 {
-	printf("GC called\n");
 	std::list<struct ssd_block>::iterator iter;
 	std::list<struct ssd_block>::iterator max_benefit_block_reference = filled_block_list.end();
 	float max_benefit = 0, cur_benefit;
@@ -882,6 +890,7 @@ enum status FtlImpl_Page::garbage_collect_cached(Event &event)
 		cur_benefit = (1.0 - utilization)*(float)age / (1.0 + utilization);
 		if(iter->lifetime_left == 0)
 		{
+			printf("This is the problem\n");
 			continue;  
 		}
 		if(cur_benefit > 0 && (max_benefit == 0 || cur_benefit > max_benefit)) //&& rand()/RAND_MAX >= probab_to_skip)
@@ -901,6 +910,7 @@ enum status FtlImpl_Page::garbage_collect_cached(Event &event)
 	Address target_block_address = target_block.physical_address;
 	unsigned int target_plane = target_block_address.package*PACKAGE_SIZE*DIE_SIZE + target_block_address.die*DIE_SIZE + target_block_address.plane;
 	std::list<struct ssd_block>::iterator target_block_iterator;
+	unsigned int start_size = background_events[target_plane].size();
 
 	bool clean_pages_found = false;
 	for(iter = allocated_block_list.begin();iter!=allocated_block_list.end();iter++)
@@ -989,8 +999,10 @@ enum status FtlImpl_Page::garbage_collect_cached(Event &event)
 	background_events[target_plane].push_back(bg_erase);
 	filled_block_list.erase(max_benefit_block_reference);
 	bg_cleaning_blocks[target_plane].push_back(target_block);
-	printf("pushed to bg events\n");	
-	printf("pushed to bg_cleaning_blocks\n");
+
+	unsigned int end_size = background_events[target_plane].size();
+	//printf("GC added %d elements to plane %d\n", end_size - start_size, target_plane);
+
 	return SUCCESS;
 
 }
@@ -1002,7 +1014,7 @@ void FtlImpl_Page::process_background_tasks(Event &event, bool urgent)
 	if(free_block_list.size() == 0)
 	{
 		urgent = true;
-		printf("URGENT\n");
+		//printf("URGENT\n");
 	}
 	bool open_events_processed[SSD_SIZE*PACKAGE_SIZE*DIE_SIZE];
 	for(unsigned int k=0;k<SSD_SIZE*PACKAGE_SIZE*DIE_SIZE;k++)
@@ -1016,7 +1028,7 @@ void FtlImpl_Page::process_background_tasks(Event &event, bool urgent)
 	unsigned int earliest_possible_start_plane;
 	for(unsigned int plane_num=0;plane_num<SSD_SIZE*PACKAGE_SIZE*DIE_SIZE;plane_num++)
 	{
-		printf("PBT %d %d\n", plane_num, background_events[plane_num].size());
+		//printf("%d\t%d\n", plane_num, background_events[plane_num].size());
 		if(background_events[plane_num].size() == 0)
 		{
 			continue;
@@ -1026,6 +1038,7 @@ void FtlImpl_Page::process_background_tasks(Event &event, bool urgent)
 		while(background_events[plane_num].size() > 0 && (urgent || background_events[plane_num].front().start_time <= cur_simulated_time))
 		{
 			struct ftl_event first_event = background_events[plane_num].front();
+			costly_counter++;
 			Address candidate_address = first_event.physical_address;
 			bool perform_first_task = true;
 			if(first_event.type == READ)
@@ -1070,8 +1083,8 @@ void FtlImpl_Page::process_background_tasks(Event &event, bool urgent)
 					perform_first_task = false;
 					if(background_events[plane_num].front().start_time < (*iter).end_time)
 						background_events[plane_num].front().start_time = (*iter).end_time;	
-					if(!urgent)
-						break;
+					if(!urgent || (earliest_possible_start != -1 && earliest_possible_start < background_events[plane_num].front().start_time))
+							break;
 				}
 			
 			}
@@ -1125,9 +1138,10 @@ void FtlImpl_Page::process_background_tasks(Event &event, bool urgent)
 			}
 			else
 			{
+				skip_count++;
 				if(urgent)
 				{
-					printf("%d %f %f\n", plane_num, earliest_possible_start, background_events[plane_num].front().start_time);
+					//printf("%d %f %f\n", plane_num, earliest_possible_start, background_events[plane_num].front().start_time);
 					if( earliest_possible_start == -1 || 
 						earliest_possible_start > background_events[plane_num].front().start_time)
 					{
@@ -1144,7 +1158,26 @@ void FtlImpl_Page::process_background_tasks(Event &event, bool urgent)
 		unsigned int plane_num = earliest_possible_start_plane;
 		while(background_events[plane_num].size() > 0 && urgent)
 		{
+			//printf("Urgent %d\t%d\n", plane_num, background_events[plane_num].size());
 			struct ftl_event first_event = background_events[plane_num].front();
+			struct ftl_event second_event = background_events[plane_num][1];
+			
+			if(first_event.type == READ && second_event.type != WRITE)
+			{
+				background_events[plane_num].erase(background_events[plane_num].begin());
+				background_events[plane_num].front().start_time = first_event.start_time;
+				continue;
+			}
+
+			urgent_counter++;
+			if(first_event.type != ERASE && 
+				!(logical_page_list[first_event.logical_address].physical_address == first_event.physical_address) )
+			{
+				background_events[plane_num].erase(background_events[plane_num].begin());
+				if(background_events[plane_num].size() > 0)
+					background_events[plane_num].front().start_time = first_event.start_time;
+				continue;
+			}
 			bool is_erase = false;
 			double task_time = 0;
 			if(first_event.type == READ)
@@ -1163,6 +1196,9 @@ void FtlImpl_Page::process_background_tasks(Event &event, bool urgent)
 			}
 			else if(first_event.type == ERASE)
 			{
+
+
+
 				Event bg_erase(first_event.type, first_event.logical_address, 1, first_event.start_time);
 				bg_erase.set_address(first_event.physical_address);
 				controller.issue(bg_erase, false);
@@ -1194,7 +1230,7 @@ void FtlImpl_Page::process_background_tasks(Event &event, bool urgent)
 		}
 	}
 	if(urgent && earliest_possible_start == -1)
-		printf("Something is not quite right\n");
+		printf("We are running out of space.\n");
 }
 
 void FtlImpl_Page::populate_queue_len(double time, unsigned int plane_num)

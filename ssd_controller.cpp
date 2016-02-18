@@ -75,8 +75,9 @@ enum status Controller::event_arrive(Event &event)
 		return ftl->read(event);
 	else if(event.get_event_type() == WRITE)
 	{
-		enum status ret_val = ftl->write(event);
-		printf("returning %d %d\n", ret_val==SUCCESS, ret_val==FAILURE);
+		enum status ret_val =  ftl->write(event);
+		if(ret_val == FAILURE)
+			printf("returning FAILRUE\n");
 		return ret_val;
 	}
 	else if(event.get_event_type() == TRIM)
