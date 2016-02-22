@@ -50,7 +50,7 @@ int main(int argc, char **argv)
 	bool write_data;
 	unsigned int req_per_thread = 1000;
 	
-	unsigned int total_read_count = 400000, cur_read_count = 0;
+	unsigned int total_read_count = 500000, cur_read_count = 0;
 
 	int read_loc = 0;
 	int write_loc = 0;

@@ -867,6 +867,7 @@ public:
 private:
 	unsigned int latest_write_time;
 	struct logical_page *logical_page_list;
+	bool gc_required;
 	unsigned int RAW_SSD_BLOCKS, ADDRESSABLE_SSD_PAGES;
 	Address log_write_address;
 	std::list<struct ssd_block> free_block_list;
@@ -885,8 +886,8 @@ private:
 	unsigned int get_block_starting_lba(unsigned int lba);
 	unsigned int get_logical_block_num(unsigned int lba);
 	Address find_write_location(Event &event, Address cur, bool *already_open);
-	bool increment_log_write_address(Event &event, bool *gc_required, bool bg_write);
-	bool allocate_new_block(Address requested_address, Event &event, bool *gc_required, bool bg_write);
+	bool increment_log_write_address(Event &event, bool bg_write);
+	bool allocate_new_block(Address requested_address, Event &event, bool bg_write);
 	unsigned int get_next_block_lba(unsigned int lba);
 	Address get_next_block_pba(Address pba);
 	enum status garbage_collect(Event &event);

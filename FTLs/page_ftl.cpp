@@ -66,6 +66,7 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller):FtlParent(controller)
 	bg_cleaning_blocks = std::vector<std::vector<struct ssd_block> >(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE);
 	urgent_bg_events = std::vector<std::vector<struct urgent_bg_events_pointer> >(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE);
 	queue_lengths = (unsigned int *)malloc(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * sizeof(unsigned int));
+	gc_required = false;
 	for(unsigned int i=0;i<SSD_SIZE * PACKAGE_SIZE * DIE_SIZE;i++)
 	{
 		open_events[i].reserve(PLANE_SIZE * BLOCK_SIZE);
@@ -341,13 +342,13 @@ Address FtlImpl_Page::find_write_location(Event &event, Address cur, bool *alrea
 	return ret_address;
 }
 
-bool FtlImpl_Page::increment_log_write_address(Event &event, bool *gc_required, bool bg_write)
+bool FtlImpl_Page::increment_log_write_address(Event &event, bool bg_write)
 {
 	Address null_address;
 	null_address.valid = NONE;
 	if(log_write_address.valid == NONE)
 	{
-		return allocate_new_block(null_address, event, gc_required, bg_write);
+		return allocate_new_block(null_address, event, bg_write);
 	}
 
 	bool already_open = false;
@@ -375,7 +376,7 @@ bool FtlImpl_Page::increment_log_write_address(Event &event, bool *gc_required, 
 			log_write_address.page += 1;
 			return true;
 		}
-		return allocate_new_block(null_address, event, gc_required, bg_write);
+		return allocate_new_block(null_address, event, bg_write);
 	}
 	else
 	{
@@ -387,18 +388,18 @@ bool FtlImpl_Page::increment_log_write_address(Event &event, bool *gc_required, 
 				log_write_address.page += 1;
 				return true;
 			}
-			return allocate_new_block(null_address, event, gc_required, bg_write);
+			return allocate_new_block(null_address, event, bg_write);
 		}
 		else
 		{
 			next_write_address.page = 0;
 			next_write_address.valid = BLOCK;
-			return allocate_new_block(next_write_address, event, gc_required, bg_write);
+			return allocate_new_block(next_write_address, event, bg_write);
 		}
 	}
 }
 
-bool FtlImpl_Page::allocate_new_block(Address requested_address, Event &event, bool *gc_required, bool bg_write)
+bool FtlImpl_Page::allocate_new_block(Address requested_address, Event &event, bool bg_write)
 {
 	if(free_block_list.size() == 0)
 	{
@@ -407,7 +408,7 @@ bool FtlImpl_Page::allocate_new_block(Address requested_address, Event &event, b
 	}
 	if(free_block_list.size() <= clean_threshold)
 	{
-		*gc_required = true;
+		gc_required = true;
 	}
 	bool ret_val = false;
 	if(requested_address.valid == NONE)
@@ -548,12 +549,18 @@ FtlImpl_Page::~FtlImpl_Page(void)
 		iter = free_block_list.erase(iter);
 	for(iter=filled_block_list.begin();iter!=filled_block_list.end();)
 		iter = filled_block_list.erase(iter);
-	std::vector<struct ssd_block>::iterator i;
-	for(unsigned int k=0;k<SSD_SIZE*PACKAGE_SIZE*DIE_SIZE;k++)
+	for(unsigned int l=0;l<SSD_SIZE*PACKAGE_SIZE*DIE_SIZE;l++)
 	{
-		for(i=bg_cleaning_blocks[k].begin();i!=bg_cleaning_blocks[k].end();)
-			bg_cleaning_blocks[k].erase(i);
+		bg_cleaning_blocks[l].clear();
+		urgent_bg_events[l].clear();
+		open_events[l].clear();
+		background_events[l].clear();
 	}
+	bg_cleaning_blocks.clear();
+	urgent_bg_events.clear();
+	open_events.clear();
+	background_events.clear();
+	free(queue_lengths);
 }
 
 enum status FtlImpl_Page::read(Event &event, bool actual_time)
@@ -594,9 +601,8 @@ enum status FtlImpl_Page::write(Event &event, bool actual_time)
 	}
 	if(event.get_noop() == true)
 		return SUCCESS; 
-	bool gc_required = false;
 	unsigned int logical_page_num = event.get_logical_address();
-	if(!increment_log_write_address(event, &gc_required, !actual_time))
+	if(!increment_log_write_address(event, actual_time))
 	{
 		printf("returning known FAILURE\n");
 		return FAILURE; 
@@ -750,6 +756,23 @@ enum status FtlImpl_Page::garbage_collect_default(Event &event)
 		}
 	}
 	
+	cleaning_possible = false;
+	for(unsigned int i=0;i<SSD_SIZE*PACKAGE_SIZE*DIE_SIZE;i++)
+	{
+		if(bg_cleaning_blocks[i].size() == 0)
+		{
+			cleaning_possible = true;
+			break;
+		}
+	}
+
+	if(!cleaning_possible)
+	{
+		return FAILURE;
+	}
+
+	cleaning_possible = false;
+
 	for(iter=filled_block_list.begin();iter!=filled_block_list.end();iter++)
 	{
 		float utilization = (float)iter->valid_page_count/(float)BLOCK_SIZE;
@@ -759,9 +782,10 @@ enum status FtlImpl_Page::garbage_collect_default(Event &event)
 		}
 		double age = get_average_age(*iter);
 		cur_benefit = (1.0 - utilization)*(float)age / (1.0 + utilization);
-		if(iter->lifetime_left == 0)
+		Address possible_address = iter->physical_address;
+		unsigned int possible_plane_num = possible_address.package*PACKAGE_SIZE*DIE_SIZE + possible_address.die*DIE_SIZE + possible_address.plane;
+		if(iter->lifetime_left == 0 || bg_cleaning_blocks[possible_plane_num].size() > 0)
 		{
-			printf("This is the problem\n");
 			continue;  
 		}
 		if(cur_benefit > 0 && (max_benefit == 0 || cur_benefit > max_benefit)) //&& rand()/RAND_MAX >= probab_to_skip)
@@ -1125,7 +1149,12 @@ void FtlImpl_Page::process_background_tasks(Event &event, bool urgent)
 					block_to_clean.last_page_written = 0;
 					block_to_clean.lifetime_left -= 1;
 					free_block_list.push_back(block_to_clean);
+					if(free_block_list.size() > clean_threshold)
+					{
+						gc_required = false;
+					}
 					bg_cleaning_blocks[plane_num].erase(bg_cleaning_blocks[plane_num].begin());
+					urgent_bg_events[plane_num].erase(urgent_bg_events[plane_num].begin());
 					is_erase = true;
 					controller.stats.numErase++;
 				}
@@ -1142,6 +1171,7 @@ void FtlImpl_Page::process_background_tasks(Event &event, bool urgent)
 				{
 					urgent = false;
 				}
+				
 				std::vector<struct urgent_bg_events_pointer>::iterator urgent_pointer;
 				for(urgent_pointer=urgent_bg_events[plane_num].begin();urgent_pointer!=urgent_bg_events[plane_num].end();urgent_pointer++)
 				{
@@ -1152,6 +1182,7 @@ void FtlImpl_Page::process_background_tasks(Event &event, bool urgent)
 					if(urgent_pointer->erase_index > 0)
 						urgent_pointer->erase_index--;
 				}
+				
 			}
 			else
 			{
@@ -1174,6 +1205,7 @@ void FtlImpl_Page::process_background_tasks(Event &event, bool urgent)
 	{
 		unsigned int plane_num = earliest_possible_start_plane;
 		double first_event_start_time = background_events[plane_num].front().start_time;
+		
 		struct urgent_bg_events_pointer urgent_bg_events_location = urgent_bg_events[plane_num].front();
 		urgent_bg_events[plane_num].erase(urgent_bg_events[plane_num].begin());
 		std::vector<struct ftl_event>::iterator begin_pointer = background_events[plane_num].begin();
@@ -1202,6 +1234,7 @@ void FtlImpl_Page::process_background_tasks(Event &event, bool urgent)
 			else
 				urgent_pointer->erase_index = 0;
 		}
+		
 		background_events[plane_num].front().start_time = first_event_start_time;
 		while(background_events[plane_num].size() > 0 && urgent)
 		{
@@ -1243,9 +1276,6 @@ void FtlImpl_Page::process_background_tasks(Event &event, bool urgent)
 			}
 			else if(first_event.type == ERASE)
 			{
-
-
-
 				Event bg_erase(first_event.type, first_event.logical_address, 1, first_event.start_time);
 				bg_erase.set_address(first_event.physical_address);
 				controller.issue(bg_erase, false);
@@ -1256,6 +1286,10 @@ void FtlImpl_Page::process_background_tasks(Event &event, bool urgent)
 				block_to_clean.last_page_written = 0;
 				block_to_clean.lifetime_left -= 1;
 				free_block_list.push_back(block_to_clean);
+				if(free_block_list.size() > clean_threshold)
+				{
+					gc_required = false;
+				}
 				bg_cleaning_blocks[plane_num].erase(bg_cleaning_blocks[plane_num].begin());
 				is_erase = true;
 				controller.stats.numErase++;
