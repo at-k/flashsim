@@ -828,6 +828,12 @@ struct background_cleaning_blocks
 	struct ssd_block cleaning_block;
 };
 
+struct urgent_bg_events_pointer
+{
+	unsigned int rw_start_index;
+	unsigned int rw_end_index;
+	unsigned int erase_index;
+};
 
 
 class Cache
@@ -870,6 +876,7 @@ private:
 	unsigned int *queue_lengths;
 	std::vector< std::vector<struct ftl_event> >background_events;
 	std::vector< std::vector<struct ssd_block> >bg_cleaning_blocks;
+	std::vector< std::vector<struct urgent_bg_events_pointer> >urgent_bg_events;
 	unsigned int clean_threshold;
 	double get_average_age(struct ssd_block block);
 	Address translate_lba_pba(unsigned int lba);
