@@ -4,8 +4,7 @@ DEBUGFLAGS=-g
 LDFLAGS=-pg
 HEADERS=ssd.h
 SOURCES_SSDLIB = $(filter-out ssd_ftl.cpp, $(wildcard ssd_*.cpp))  \
-                 $(wildcard FTLs/*.cpp)                            \
-                 SSDSim.cpp
+                 $(wildcard FTLs/*.cpp)                            
 OBJECTS_SSDLIB=$(patsubst %.cpp,%.o,$(SOURCES_SSDLIB))
 SOURCES_RUNS = $(wildcard run_*.cpp)
 PROGRAMS = $(patsubst run_%.cpp,%,$(SOURCES_RUNS))

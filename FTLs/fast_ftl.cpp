@@ -93,7 +93,11 @@ void FtlImpl_Fast::initialize_log_pages()
 	}
 	Block_manager::instance()->init_free_list(event);
 }
-enum status FtlImpl_Fast::read(Event &event, bool actual_time)
+enum status FtlImpl_Fast::noop(Event &event, bool &op_complete, double &end_time, bool actual_time)
+{
+	return SUCCESS;
+}
+enum status FtlImpl_Fast::read(Event &event, bool &op_complete, double &end_time, bool actual_time)
 {
 	//PRINT_FUNC;
 	//printf("FTL reading %d\n", event.get_logical_address());
@@ -155,7 +159,7 @@ enum status FtlImpl_Fast::read(Event &event, bool actual_time)
 	return controller.issue(event, true);
 }
 
-enum status FtlImpl_Fast::write(Event &event, bool actual_time)
+enum status FtlImpl_Fast::write(Event &event, bool &op_complete, double &end_time, bool actual_time)
 {
 	//PRINT_FUNC;
 	//printf("FTL writing %d\n", event.get_logical_address());

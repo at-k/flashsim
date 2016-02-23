@@ -47,6 +47,7 @@ Ssd::Ssd(uint ssd_size):
 	ram(RAM_READ_DELAY, RAM_WRITE_DELAY), 
 	bus(size, BUS_CTRL_DELAY, BUS_DATA_DELAY, BUS_TABLE_SIZE, BUS_MAX_CONNECT), 
 
+	cache(),
 	/* use a const pointer (Package * const data) to use as an array
 	 * but like a reference, we cannot reseat the pointer */
 	data((Package *) malloc(ssd_size * sizeof(Package))), 
@@ -60,8 +61,7 @@ Ssd::Ssd(uint ssd_size):
 	least_worn(0), 
 
 	/* assume hardware created at time 0 and had an implied free erasure */
-	last_erase_time(0.0),
-	cache()
+	last_erase_time(0.0)
 {
 	uint i;
 
@@ -127,9 +127,9 @@ Ssd::~Ssd(void)
 	return;
 }
 
-double Ssd::event_arrive(enum event_type type, ulong logical_address, uint size, double start_time)
+bool Ssd::event_arrive(enum event_type type, ulong logical_address, uint size, double start_time, bool &op_complete, double &end_time)
 {
-	return event_arrive(type, logical_address, size, start_time, NULL);
+	return event_arrive(type, logical_address, size, start_time, op_complete, end_time, NULL);
 }
 
 /* This is the function that will be called by DiskSim
@@ -138,7 +138,7 @@ double Ssd::event_arrive(enum event_type type, ulong logical_address, uint size,
  * 	time (arrive time) of the request
  * The SSD will process the request and return the time taken to process the
  * 	request.  Remember to use the same time units as in the config file. */
-bool Ssd::event_arrive(enum event_type type, ulong logical_address, uint size, double start_time, void *buffer)
+bool Ssd::event_arrive(enum event_type type, ulong logical_address, uint size, double start_time, bool &op_complete, double &end_time, void *buffer)
 {
 	assert(start_time >= 0.0);
 
@@ -159,7 +159,7 @@ bool Ssd::event_arrive(enum event_type type, ulong logical_address, uint size, d
 
 	event->set_payload(buffer);
 
-	if(controller.event_arrive(*event) != SUCCESS)
+	if(controller.event_arrive(*event, op_complete, end_time) != SUCCESS)
 	{
 		fprintf(stderr, "Ssd error: %s: request failed:\n", __func__);
 		event -> print(stderr);
@@ -169,7 +169,7 @@ bool Ssd::event_arrive(enum event_type type, ulong logical_address, uint size, d
 
 	/* use start_time as a temporary for returning time taken to service event */
 	start_time = event -> get_time_taken();
-	//delete event;
+	delete event;
 	return true;
 }
 
@@ -358,7 +358,7 @@ double Ssd::ready_at(void)
 {
 	double next_ready_time = std::numeric_limits<double>::max();
 
-	for (int i=0;i<size;i++)
+	for (unsigned int i=0;i<size;i++)
 	{
 		double ready_time = bus.get_channel(i).ready_time();
 

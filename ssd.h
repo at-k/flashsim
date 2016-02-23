@@ -193,7 +193,7 @@ enum block_state{FREE, ACTIVE, INACTIVE};
  * 	                                page states set to empty)
  * 	merge - move valid pages from block at address (page state set to invalid)
  * 	           to free pages in block at merge_address */
-enum event_type{READ, WRITE, ERASE, MERGE, TRIM};
+enum event_type{READ, WRITE, ERASE, MERGE, TRIM, NOOP};
 
 /* General return status
  * return status for simulator operations that only need to provide general
@@ -777,8 +777,9 @@ public:
 	FtlParent(Controller &controller);
 
 	virtual ~FtlParent () {};
-	virtual enum status read(Event &event, bool actual_time = true) = 0;
-	virtual enum status write(Event &event, bool actual_time = true) = 0;
+	virtual enum status read(Event &event, bool &op_complete, double &end_time, bool actual_time = true) = 0;
+	virtual enum status write(Event &event, bool &op_complete, double &end_time, bool actual_time = true) = 0;
+	virtual enum status noop(Event &event, bool &op_complete, double &end_time, bool actual_time = true) = 0;
 	virtual enum status trim(Event &event) = 0;
 	virtual void cleanup_block(Event &event, Block *block);
 
@@ -860,8 +861,9 @@ class FtlImpl_Page : public FtlParent
 public:
 	FtlImpl_Page(Controller &controller);
 	~FtlImpl_Page();
-	enum status read(Event &event, bool actual_time = true);
-	enum status write(Event &event, bool actual_time = true);
+	enum status read(Event &event, bool &op_complete, double &end_time, bool actual_time = true);
+	enum status write(Event &event, bool &op_complete, double &end_time, bool actual_time = true);
+	enum status noop(Event &event, bool &op_complete, double &end_time, bool actual_time = true);
 	enum status trim(Event &event);
 	void get_min_max_erases();
 private:
@@ -907,8 +909,9 @@ class FtlImpl_Fast : public FtlParent
 public:
 	FtlImpl_Fast(Controller &controller);
 	~FtlImpl_Fast();
-	enum status read(Event &event, bool actual_time = true);
-	enum status write(Event &event, bool actual_time = true);
+	enum status read(Event &event, bool &op_complete, double &end_time, bool actual_time = true);
+	enum status write(Event &event, bool &op_complete, double &end_time, bool actual_time = true);
+	enum status noop(Event &event, bool &op_complete, double &end_time, bool actual_time = true);
 	enum status trim(Event &event);
 	void get_min_max_erases();
 private:
@@ -972,7 +975,7 @@ class Controller
 public:
 	Controller(Ssd &parent);
 	~Controller(void);
-	enum status event_arrive(Event &event);
+	enum status event_arrive(Event &event, bool &op_complete, double &end_time);
 	friend class FtlParent;
 	friend class FtlImpl_Page;
 	friend class FtlImpl_Fast;
@@ -1006,8 +1009,8 @@ class Ssd
 public:
 	Ssd (uint ssd_size = SSD_SIZE);
 	~Ssd(void);
-	bool event_arrive(enum event_type type, ulong logical_address, uint size, double start_time);
-	double event_arrive(enum event_type type, ulong logical_address, uint size, double start_time, void *buffer);
+	bool event_arrive(enum event_type type, ulong logical_address, uint size, double start_time, bool &op_complete, double &end_time);
+	bool event_arrive(enum event_type type, ulong logical_address, uint size, double start_time, bool &op_complete, double &end_time, void *buffer);
 	void *get_result_buffer();
 	friend class Controller;
 	void print_statistics();

@@ -43,9 +43,11 @@ Controller::Controller(Ssd &parent):
 {
 	switch (FTL_IMPLEMENTATION)
 	{
+		/*
 	case 0:
 		ftl = new FtlImpl_Page(*this);
 		break;
+		*/
 		/*
 	case 1:
 		ftl = new FtlImpl_Page_PC(*this);
@@ -69,14 +71,16 @@ Controller::~Controller(void)
 	return;
 }
 
-enum status Controller::event_arrive(Event &event)
+enum status Controller::event_arrive(Event &event, bool &op_complete, double &end_time)
 {
 	if(event.get_event_type() == READ)
-		return ftl->read(event);
+		return ftl->read(event, op_complete, end_time);
 	else if(event.get_event_type() == WRITE)
-		return ftl->write(event);
-	else if(event.get_event_type() == TRIM)
-		return ftl->trim(event);
+		return ftl->write(event, op_complete, end_time);
+	else if(event.get_event_type() == NOOP)
+		return ftl->noop(event, op_complete, end_time);
+	//else if(event.get_event_type() == TRIM)
+	//	return ftl->trim(event, op_complete, end_time);
 	else
 		fprintf(stderr, "Controller: %s: Invalid event type\n", __func__);
 	return FAILURE;

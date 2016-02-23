@@ -38,7 +38,7 @@ int main()
 	Ssd *ssd = new Ssd();
 
 	std::set<int> addresses;
-	double result;
+	bool result;
 	srand(time(NULL));
 	
 	FILE *log_file = fopen("./test_output.log", "w");
@@ -48,24 +48,19 @@ int main()
 	int i = 0;
 	int NUM_PAGES = LAST_LBA + BLOCK_SIZE;
 
+	bool temp_flag = false;
+	double temp_total_time = 0;
 
 	for(i=0;i<NUM_PAGES;i++)
 	{
 		int write_address = i%LAST_LBA;
-		result = ssd->event_arrive(WRITE, write_address, 1, (double)(i*350));
-		if(result == -1)
+		result = ssd->event_arrive(WRITE, write_address, 1, (double)(i*350), temp_flag, temp_total_time);
+		if(result == false)
 		{
 			printf("breaking at write %d\n", i);
 			break;
 		}
 	}
-	printf("action at %f\n", (double)i*350);
-	result = ssd->event_arrive(WRITE, 0, 1, (double)(i*350));
-	result = ssd->event_arrive(READ, 10, 1, (double)(35000000));
-	printf("%f\n", result);
-	ssd->print_ftl_statistics(stdout);
-	delete ssd;
-	return 0;
 
 	/*
 	for (i = 0; i < NUM_PAGES; i++)
