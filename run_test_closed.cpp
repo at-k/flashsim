@@ -84,7 +84,7 @@ int main(int argc, char **argv)
 	strcat(read_file_name, argv[2]);
 	strcat(read_file_name, "_");
 	strcat(read_file_name, argv[3]);
-	strcat(read_file_name, ".out");
+	strcat(read_file_name, "_.out");
 
 	strcat(write_file_name, "closed_write_");
 	strcat(write_file_name, ftl_implementation);
@@ -96,7 +96,7 @@ int main(int argc, char **argv)
 	strcat(write_file_name, argv[2]);
 	strcat(write_file_name, "_");
 	strcat(write_file_name, argv[3]);
-	strcat(write_file_name, ".out");
+	strcat(write_file_name, "_.out");
 
 
 	read_file = fopen(read_file_name, "w");
