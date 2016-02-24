@@ -106,8 +106,8 @@ int main(int argc, char **argv)
 	unsigned int i=0;
 	for (i = 0; i < occupied; i++)
 	{
-		double result = ssd -> event_arrive(WRITE, i%lastLBA, 1, (double) i*1000);
-		if(result == -1)
+		bool result = ssd -> event_arrive(WRITE, i%lastLBA, 1, (double) i*1000);
+		if(result == false)
 		{
 			printf("returning failure\n");
 			return -1;
@@ -139,13 +139,13 @@ int main(int argc, char **argv)
 	bool loop = true;
 	for(unsigned int i=0;i<q_depth;i++)
 	{
-		double result;
+		bool result;
 		if(write_data && i >= q_depth/2)
 		{
 			location = rand()%lastLBA;
 			//location = (write_loc+1)%lastLBA;	
 			result = ssd->event_arrive(WRITE, location, 1, (double) initial_delay);
-			if(result == -1)
+			if(result == false)
 			{
 				fprintf(read_file, "==========\nCould not do a write, incomplete experiment\n");
 				goto exit;
@@ -164,7 +164,7 @@ int main(int argc, char **argv)
 			}
 			
 			result = ssd->event_arrive(READ, location, 1, (double) initial_delay);
-			if(result == -1)
+			if(result == false)
 			{
 				fprintf(read_file, "==========\nCould not do a read, incomplete experiment\n");
 				goto exit;
@@ -206,7 +206,7 @@ int main(int argc, char **argv)
 		}
 		response_times.erase(min_val_reference);
 		double next_request_time = min_val;
-		double result;
+		bool result;
 		unsigned int position = min_val_reference - response_times.begin();
 		if(write_data && position >= q_depth/2)
 		{
@@ -216,7 +216,7 @@ int main(int argc, char **argv)
 			//printf("[APP WRITE] 1 %f\n", next_request_time);
 			result = ssd->event_arrive(WRITE, location, 1, (double) next_request_time);
 			//printf("[APP WRITE COMPLETE] %f\n", next_request_time + result);
-			if(result == -1)
+			if(result == false)
 			{
 				fprintf(read_file, "==========\nCould not do a write, incomplete experiment\n");
 				goto exit;
@@ -237,7 +237,7 @@ int main(int argc, char **argv)
 			//printf("[APP READ] 1 %f\n", next_request_time);
 			result = ssd->event_arrive(READ, location, 1, (double) next_request_time);
 			//printf("[APP READ COMPLETE] %f\n", next_request_time + result);
-			if(result == -1)	
+			if(result == false)	
 			{
 				fprintf(read_file, "==========\nCould not do a read, incomplete experiment\n");
 				goto exit;

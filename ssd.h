@@ -39,6 +39,7 @@
 #include <boost/multi_index/member.hpp>
 #include <boost/multi_index/global_fun.hpp>
 #include <boost/multi_index/random_access_index.hpp>
+#include <limits>
  
 #ifndef _SSD_H
 #define _SSD_H
@@ -814,6 +815,8 @@ struct ssd_block
   unsigned int last_page_written;
 };
 
+enum ftl_event_process{BACKGROUND, FOREGROUND};
+
 struct ftl_event
 {
 	enum event_type type;
@@ -821,6 +824,9 @@ struct ftl_event
 	unsigned int logical_address;
 	double start_time;
 	double end_time;
+	enum ftl_event_process process;
+	bool *op_complete_pointer;
+	double *end_time_pointer;
 };
 
 struct background_cleaning_blocks
@@ -866,6 +872,7 @@ public:
 	enum status noop(Event &event, bool &op_complete, double &end_time, bool actual_time = true);
 	enum status trim(Event &event);
 	void get_min_max_erases();
+	bool READ_PREFERENCE;
 private:
 	unsigned int latest_write_time;
 	struct logical_page *logical_page_list;
@@ -878,6 +885,7 @@ private:
 	std::vector< std::vector<struct ftl_event> >open_events;
 	unsigned int *queue_lengths;
 	std::vector< std::vector<struct ftl_event> >background_events;
+	std::vector< std::vector<struct ftl_event> >urgent_queues;
 	std::vector< std::vector<struct ssd_block> >bg_cleaning_blocks;
 	std::vector< std::vector<struct urgent_bg_events_pointer> >urgent_bg_events;
 	unsigned int clean_threshold;
@@ -888,19 +896,23 @@ private:
 	unsigned int get_block_starting_lba(unsigned int lba);
 	unsigned int get_logical_block_num(unsigned int lba);
 	Address find_write_location(Event &event, Address cur, bool *already_open);
-	bool increment_log_write_address(Event &event, bool bg_write);
-	bool allocate_new_block(Address requested_address, Event &event, bool bg_write);
+	bool increment_log_write_address(Event &event, Address asked_for, bool already_allocated, bool bg_write);
+	bool allocate_new_block(Address requested_address);
 	unsigned int get_next_block_lba(unsigned int lba);
 	Address get_next_block_pba(Address pba);
 	enum status garbage_collect(Event &event);
 	enum status garbage_collect_default(Event &event);
 	enum status garbage_collect_cached(Event &event);
 	double age_variance_limit;
-	void add_event(Event event);
 	void add_background_event(struct ftl_event event);
-	void process_background_tasks(Event &event, bool urgent);
-	void process_open_events_table(Event event);
+	void process_background_tasks(Event &event);
+	void process_open_events_table(unsigned int plane_num, double time);
 	void populate_queue_len(double time, unsigned int plane_num);
+	double read_(Event &event, bool actual_time = true);
+	double write_(Event &event, bool actual_time = true);
+	void set_urgent_queues(Event &event);
+	double process_urgent_queues(Event &event);
+	bool urgent_cleaning;
 	//bool compare_ftl_event_start_times(const struct ftl_event a, const struct ftl_event b);
 };
 

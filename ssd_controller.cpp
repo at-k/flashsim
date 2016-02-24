@@ -43,11 +43,9 @@ Controller::Controller(Ssd &parent):
 {
 	switch (FTL_IMPLEMENTATION)
 	{
-		/*
 	case 0:
 		ftl = new FtlImpl_Page(*this);
 		break;
-		*/
 		/*
 	case 1:
 		ftl = new FtlImpl_Page_PC(*this);
