@@ -829,6 +829,14 @@ struct ftl_event
 	double *end_time_pointer;
 };
 
+struct urgent_ftl_event
+{
+	struct ftl_event event;
+	bool parent_completed;
+	bool predecessor_completed;
+	struct urgent_ftl_event *child;
+};
+
 struct background_cleaning_blocks
 {
 	struct ssd_block block_to_clean;
@@ -885,7 +893,7 @@ private:
 	std::vector< std::vector<struct ftl_event> >open_events;
 	unsigned int *queue_lengths;
 	std::vector< std::vector<struct ftl_event> >background_events;
-	std::vector< std::vector<struct ftl_event> >urgent_queues;
+	std::vector< std::vector<struct urgent_ftl_event *> >urgent_queues;
 	std::vector< std::vector<struct ssd_block> >bg_cleaning_blocks;
 	std::vector< std::vector<struct urgent_bg_events_pointer> >urgent_bg_events;
 	unsigned int clean_threshold;
@@ -905,8 +913,9 @@ private:
 	enum status garbage_collect_cached(Event &event);
 	double age_variance_limit;
 	void add_background_event(struct ftl_event event);
-	void process_background_tasks(Event &event);
-	void process_open_events_table(unsigned int plane_num, double time);
+	double process_background_tasks(Event &event);
+	double process_open_events_table(unsigned int plane_num, double time);
+	double process_open_events_table(double time);
 	void populate_queue_len(double time, unsigned int plane_num);
 	double read_(Event &event, bool actual_time = true);
 	double write_(Event &event, bool actual_time = true);
