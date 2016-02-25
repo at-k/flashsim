@@ -48,12 +48,10 @@ int main(int argc, char **argv)
 	double initial_delay;
 	unsigned int q_depth;
 	bool write_data;
-	unsigned int req_per_thread = 1000;
+	//unsigned int req_per_thread = 1000;
 	
 	unsigned int total_read_count = 500000, cur_read_count = 0;
 
-	int read_loc = 0;
-	int write_loc = 0;
 
 	load_config();
 	print_config(NULL);
@@ -127,7 +125,6 @@ int main(int argc, char **argv)
 	}
 	initial_delay = write_end_time;
 
-	/*
 	if(write == 0)
 	{
 		write_data = false;
@@ -140,12 +137,17 @@ int main(int argc, char **argv)
 
 	printf("starting experiment\n");
 
-	std::vector<double> response_times;
 	unsigned int count[q_depth];
+	bool op_complete[q_depth];
+	double op_start_time[q_depth];
+	double op_complete_time[q_depth];
 	for (unsigned int i=0;i<q_depth;i++)
 	{
 		count[i] = 0;
+		op_complete[i] = false;
+		op_start_time[i] = initial_delay;
 	}	
+	next_noop_time = initial_delay;
 	unsigned int location = 0;
 	unsigned int write_count = 0;
 	bool loop = true;
@@ -155,8 +157,7 @@ int main(int argc, char **argv)
 		if(write_data && i >= q_depth/2)
 		{
 			location = rand()%lastLBA;
-			//location = (write_loc+1)%lastLBA;	
-			result = ssd->event_arrive(WRITE, location, 1, (double) initial_delay);
+			result = ssd->event_arrive(WRITE, location, 1, (double) op_start_time[i], op_complete[i], op_complete_time[i]);
 			if(result == false)
 			{
 				fprintf(read_file, "==========\nCould not do a write, incomplete experiment\n");
@@ -175,7 +176,7 @@ int main(int argc, char **argv)
 				location = rand()%lastLBA;
 			}
 			
-			result = ssd->event_arrive(READ, location, 1, (double) initial_delay);
+			result = ssd->event_arrive(READ, location, 1, (double) op_start_time[i], op_complete[i], op_complete_time[i]);
 			if(result == false)
 			{
 				fprintf(read_file, "==========\nCould not do a read, incomplete experiment\n");
@@ -184,83 +185,78 @@ int main(int argc, char **argv)
 			cur_read_count++;
 			fprintf(read_file, "%.5lf\t%.5lf\n", initial_delay, result);
 		}
-		response_times.push_back(initial_delay + result);
 		count[i]++;
 	}
 	
 
 	while(loop)
 	{
-		std::vector<double>::iterator iter, min_val_reference = response_times.end();
-		double min_val = -1;
-		for(iter=response_times.begin();iter!=response_times.end();iter++)
+		bool event_completed = false;
+		while(!event_completed)
 		{
-			//if((count[iter-response_times.begin()] < req_per_thread) && ((*iter) < min_val || min_val == -1))
-			if((*iter) < min_val || min_val == -1)
+			ssd->event_arrive(NOOP, 0, 1, next_noop_time, noop_complete, next_noop_time);
+			for(unsigned int i=0;i<q_depth;i++)
 			{
-				min_val = *iter;
-				min_val_reference = iter;
+				if(op_complete[i])
+				{
+					event_completed = true;
+					break;
+				}
 			}
 		}
-		if(min_val_reference == response_times.end())
+		for(unsigned int i=0;i<q_depth;i++)
 		{
-			printf("problem\n");
+			if(op_complete[i])
+			{
+				bool result = false;
+				op_complete[i] = false;
+				if(write_data && i >= q_depth/2)
+				{
+					count[i]++;
+					fprintf(write_file, "%.5lf\t%.5lf\n", op_start_time[i], op_complete_time[i] - op_start_time[i]);
+					write_count++;
+					op_start_time[i] = op_complete_time[i];
+					location = rand()%lastLBA;
+					addresses.insert(location);
+					result = ssd->event_arrive(WRITE, location, 1, (double) op_start_time[i], op_complete[i], op_complete_time[i]);
+					if(result == false)
+					{
+						fprintf(read_file, "==========\nCould not do a write, incomplete experiment\n");
+						goto exit;
+					}
+				}	
+				else
+				{
+					fprintf(read_file, "%.5lf\t%.5lf\n", op_start_time[i], op_complete_time[i] - op_start_time[i]);
+					count[i]++;
+					op_start_time[i] = op_complete_time[i];
+					location = rand()%lastLBA;
+					while(addresses.find(location) == addresses.end())
+					{
+						location = rand()%lastLBA;
+					}
+					cur_read_count++;	
+					result = ssd->event_arrive(READ, location, 1, (double) op_start_time[i], op_complete[i], op_complete_time[i]);
+					if(result == false)	
+					{
+						fprintf(read_file, "==========\nCould not do a read, incomplete experiment\n");
+						goto exit;
+					}
+				}
+				
+			}
 		}
-		response_times.erase(min_val_reference);
-		double next_request_time = min_val;
-		bool result;
-		unsigned int position = min_val_reference - response_times.begin();
-		if(write_data && position >= q_depth/2)
-		{
-			location = rand()%lastLBA;
-			//location = (write_loc+1)%lastLBA;
-			addresses.insert(location);
-			//printf("[APP WRITE] 1 %f\n", next_request_time);
-			result = ssd->event_arrive(WRITE, location, 1, (double) next_request_time);
-			//printf("[APP WRITE COMPLETE] %f\n", next_request_time + result);
-			if(result == false)
-			{
-				fprintf(read_file, "==========\nCould not do a write, incomplete experiment\n");
-				goto exit;
-			}
-			count[position]++;
-			fprintf(write_file, "%.5lf\t%.5lf\n", next_request_time, result);
-			write_count++;
-		}	
-		else
-		{
-			
-			location = rand()%lastLBA;
-			while(addresses.find(location) == addresses.end())
-			{
-				location = rand()%lastLBA;
-			}
-			cur_read_count++;	
-			//printf("[APP READ] 1 %f\n", next_request_time);
-			result = ssd->event_arrive(READ, location, 1, (double) next_request_time);
-			//printf("[APP READ COMPLETE] %f\n", next_request_time + result);
-			if(result == false)	
-			{
-				fprintf(read_file, "==========\nCould not do a read, incomplete experiment\n");
-				goto exit;
-			}
-			fprintf(read_file, "%.5lf\t%.5lf\n", next_request_time, result);
-			count[position]++;
-		}
-		response_times.insert(min_val_reference, next_request_time + result);
 		
 		if(cur_read_count >= total_read_count)
 		{
 			loop = false;
 			break;
 		}
-			
 		
 	}
-	*/
 exit:
 	fprintf(stdout, "========================\n");
-	//fprintf(stdout, "experiment ended with write_count as %d\n", write_count);
+	fprintf(stdout, "experiment ended with write_count as %d\n", write_count);
 	ssd->print_ftl_statistics(stdout);
 	fclose(read_file);
 	fclose(write_file);
