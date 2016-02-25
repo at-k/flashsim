@@ -880,23 +880,26 @@ public:
 	enum status noop(Event &event, bool &op_complete, double &end_time, bool actual_time = true);
 	enum status trim(Event &event);
 	void get_min_max_erases();
-	bool READ_PREFERENCE;
 private:
 	unsigned int latest_write_time;
-	struct logical_page *logical_page_list;
 	bool gc_required;
 	unsigned int RAW_SSD_BLOCKS, ADDRESSABLE_SSD_PAGES;
-	Address log_write_address;
-	std::list<struct ssd_block> free_block_list;
-	std::list<struct ssd_block> allocated_block_list;
-	std::list<struct ssd_block> filled_block_list;
+	unsigned int clean_threshold;
+	bool urgent_cleaning;
+	bool READ_PREFERENCE;
 	std::vector< std::vector<struct ftl_event> >open_events;
-	unsigned int *queue_lengths;
 	std::vector< std::vector<struct ftl_event> >background_events;
 	std::vector< std::vector<struct urgent_ftl_event *> >urgent_queues;
 	std::vector< std::vector<struct ssd_block> >bg_cleaning_blocks;
 	std::vector< std::vector<struct urgent_bg_events_pointer> >urgent_bg_events;
-	unsigned int clean_threshold;
+
+	struct logical_page *logical_page_list;
+	std::list<struct ssd_block> free_block_list;
+	std::list<struct ssd_block> allocated_block_list;
+	std::list<struct ssd_block> filled_block_list;
+	unsigned int *queue_lengths;
+	Address log_write_address;
+
 	double get_average_age(struct ssd_block block);
 	Address translate_lba_pba(unsigned int lba);
 	unsigned int translate_pba_lba(Address pba);
@@ -911,7 +914,6 @@ private:
 	enum status garbage_collect(Event &event);
 	enum status garbage_collect_default(Event &event);
 	enum status garbage_collect_cached(Event &event);
-	double age_variance_limit;
 	void add_background_event(struct ftl_event event);
 	double process_background_tasks(Event &event);
 	double process_open_events_table(unsigned int plane_num, double time);
@@ -921,7 +923,6 @@ private:
 	double write_(Event &event, bool actual_time = true);
 	void set_urgent_queues(Event &event);
 	double process_urgent_queues(Event &event);
-	bool urgent_cleaning;
 	//bool compare_ftl_event_start_times(const struct ftl_event a, const struct ftl_event b);
 };
 

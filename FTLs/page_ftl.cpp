@@ -31,16 +31,25 @@ unsigned int skip_count = 0;
 
 using namespace ssd;
 
-FtlImpl_Page::FtlImpl_Page(Controller &controller):FtlParent(controller)
+FtlImpl_Page::FtlImpl_Page(Controller &controller):FtlParent(controller), 
+	latest_write_time(0), 
+	gc_required(false),
+	RAW_SSD_BLOCKS(SSD_SIZE*PACKAGE_SIZE*DIE_SIZE*PLANE_SIZE),
+	ADDRESSABLE_SSD_PAGES(NUMBER_OF_ADDRESSABLE_BLOCKS * BLOCK_SIZE),
+	clean_threshold(float(OVERPROVISIONING)/100 * SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * PLANE_SIZE),
+	urgent_cleaning(false),
+	READ_PREFERENCE(true),
+	open_events(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE), 
+	background_events(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE), 
+	urgent_queues(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE),
+	bg_cleaning_blocks(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE), 
+	urgent_bg_events(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE)
 {
-	RAW_SSD_BLOCKS = SSD_SIZE*PACKAGE_SIZE*DIE_SIZE*PLANE_SIZE; 
-	ADDRESSABLE_SSD_PAGES = NUMBER_OF_ADDRESSABLE_BLOCKS * BLOCK_SIZE; 
 	logical_page_list = (struct logical_page *)malloc(ADDRESSABLE_SSD_PAGES * sizeof (struct logical_page));
 	for (unsigned int i=0;i<ADDRESSABLE_SSD_PAGES;i++)
 	{
 		logical_page_list[i].physical_address.valid = NONE;
 	}
-	log_write_address.valid = NONE;
 	unsigned int next_block_lba = 0;
 	for(unsigned int i=0;i<RAW_SSD_BLOCKS;i++)
 	{
@@ -59,26 +68,21 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller):FtlParent(controller)
 		if(next_block_lba == 0)
 			break;
 	}
-	clean_threshold = float(OVERPROVISIONING)/100 * SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * PLANE_SIZE;
-	age_variance_limit = 1;	
-	READ_PREFERENCE = true;
-	urgent_cleaning = false;
-	open_events = std::vector<std::vector<struct ftl_event> >(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE);
-	background_events = std::vector<std::vector<struct ftl_event> >(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE);
-	bg_cleaning_blocks = std::vector<std::vector<struct ssd_block> >(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE);
-	urgent_bg_events = std::vector<std::vector<struct urgent_bg_events_pointer> >(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE);
-	urgent_queues = std::vector<std::vector<struct urgent_ftl_event *> >(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE);
+	allocated_block_list.clear();
+	filled_block_list.clear();
 	queue_lengths = (unsigned int *)malloc(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * sizeof(unsigned int));
-	gc_required = false;
+	log_write_address.valid = NONE;
+	/*
 	for(unsigned int i=0;i<SSD_SIZE * PACKAGE_SIZE * DIE_SIZE;i++)
 	{
 		open_events[i].reserve(PLANE_SIZE * BLOCK_SIZE);
 		background_events[i].reserve(BLOCK_SIZE);
 		bg_cleaning_blocks[i].reserve(PLANE_SIZE);
 		urgent_bg_events[i].reserve(BLOCK_SIZE);
-		urgent_queues[i].reserve(BLOCK_SIZE);
+		//urgent_queues[i].reserve(BLOCK_SIZE);
 		queue_lengths[i] = 0;
 	}
+	*/
 }
 
 unsigned int FtlImpl_Page::get_next_block_lba(unsigned int lba)
@@ -453,7 +457,9 @@ double FtlImpl_Page::process_open_events_table(unsigned int plane_num, double st
 			if(iter->op_complete_pointer)
 				*(iter->op_complete_pointer) = true;
 			if(iter->end_time_pointer)
+			{
 				*(iter->end_time_pointer) = iter->end_time;
+			}
 			open_events[plane_num].erase(iter);
 		}
 		else
@@ -1262,7 +1268,6 @@ double FtlImpl_Page::process_background_tasks(Event &event)
 
 void FtlImpl_Page::set_urgent_queues(Event &event)
 {
-
 	unsigned int urgent_cleaning_plane;
 	unsigned int min_ops_required = UINT_MAX;
 	for(unsigned int plane_num=0;plane_num<SSD_SIZE*PACKAGE_SIZE*DIE_SIZE;plane_num++)
@@ -1425,11 +1430,14 @@ void FtlImpl_Page::set_urgent_queues(Event &event)
 
 double FtlImpl_Page::process_urgent_queues(Event &event)
 {
+	
 	double time = event.get_start_time();
 	double ret_time = std::numeric_limits<double>::max();
 	for(unsigned int plane_num = 0;plane_num < SSD_SIZE*PACKAGE_SIZE*DIE_SIZE;plane_num++)
 	{
 		//TODO check strict inequality
+		if(urgent_queues[plane_num].size() == 0)
+			continue;
 		std::vector<struct urgent_ftl_event *>::iterator first_iterator = urgent_queues[plane_num].begin();
 		struct urgent_ftl_event *first_pointer = *(first_iterator);
 		while(	first_pointer && 

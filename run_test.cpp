@@ -50,7 +50,37 @@ int main()
 
 	bool temp_flag = false;
 	double temp_total_time = 0;
+	bool t_flag = false;
+	double t_total_time = 0;
+	bool f = false;
+	double d = 0;
 
+	result = ssd->event_arrive(WRITE, 0, 1, 0, temp_flag, temp_total_time);
+	result = ssd->event_arrive(WRITE, 0, 1, 10, t_flag, t_total_time);
+	printf("WRITE %d %f\n", temp_flag, temp_total_time);
+	printf("WRITE %d %f\n", t_flag, t_total_time);
+	result = ssd->event_arrive(NOOP, 0, 1, 0, f, d);
+	printf("NOOP %d %f\n", f, d);
+	printf("WRITE %d %f\n", temp_flag, temp_total_time);
+	printf("WRITE %d %f\n", t_flag, t_total_time);
+	result = ssd->event_arrive(NOOP, 0, 1, d/2, f, d);
+	printf("NOOP %d %f\n", f, d);
+	printf("WRITE %d %f\n", temp_flag, temp_total_time);
+	printf("WRITE %d %f\n", t_flag, t_total_time);
+	result = ssd->event_arrive(NOOP, 0, 1, d, f, d);
+	if(d==std::numeric_limits<double>::max())
+		printf("MAX\n");
+	printf("NOOP %d %f\n", f, d);
+	printf("WRITE %d %f\n", temp_flag, temp_total_time);
+	printf("WRITE %d %f\n", t_flag, t_total_time);
+	result = ssd->event_arrive(NOOP, 0, 1, d, f, d);
+	if(d==std::numeric_limits<double>::max())
+		printf("MAX\n");
+	printf("NOOP %d %f\n", f, d);
+	printf("WRITE %d %f\n", temp_flag, temp_total_time);
+	printf("WRITE %d %f\n", t_flag, t_total_time);
+
+	/*
 	for(i=0;i<NUM_PAGES;i++)
 	{
 		int write_address = i%LAST_LBA;
@@ -61,37 +91,8 @@ int main()
 			break;
 		}
 	}
+	*/
 
-	/*
-	for (i = 0; i < NUM_PAGES; i++)
-	{
-		result = ssd -> event_arrive(WRITE, i%LAST_LBA, 1, (double) (350 * i));
-		addresses.insert(i);
-	}
-	printf("Experiment Starting\n");
-	double initial_delay = i * 350;
-	for (i = 0; i < 10000; i++)
-	{
-		double cur_time = initial_delay + (i*100);
-		unsigned int add = 0;
-		if(i%10 == 0 && i%20 != 0 && i != 0)
-		//if(i%4 == 0 && i%5 != 0 && i != 0)
-		{
-			do
-			{
-				add = rand()%LAST_LBA;
-			}
-			while(addresses.find(add) == addresses.end());
-			result = ssd -> event_arrive(READ, add, 1, cur_time);
-			fprintf(log_file, "%.5lf\n", result);
-		}
-		if(i%20 == 0)
-		{
-			add = rand()%LAST_LBA;
-			result = ssd -> event_arrive(WRITE, add, 1, cur_time);
-		}
-	}
-*/
 	delete ssd;
 	return 0;
 }

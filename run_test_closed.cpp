@@ -102,20 +102,32 @@ int main(int argc, char **argv)
 	read_file = fopen(read_file_name, "w");
 	write_file = fopen(write_file_name, "w");
 
+	bool noop_complete = false;
+	double next_noop_time = 0;
+
+	bool write_complete = false;
+	double write_end_time = 0;
+
 	unsigned int occupied = util_percent*lastLBA/100;
 	unsigned int i=0;
 	for (i = 0; i < occupied; i++)
 	{
-		bool result = ssd -> event_arrive(WRITE, i%lastLBA, 1, (double) i*1000);
+		bool result = ssd -> event_arrive(WRITE, i%lastLBA, 1, write_end_time, write_complete, write_end_time);
 		if(result == false)
 		{
 			printf("returning failure\n");
 			return -1;
 		}
+		do
+		{
+			ssd->event_arrive(NOOP, 0, 1, next_noop_time, noop_complete, next_noop_time);
+		}
+		while(!write_complete);
 		addresses.insert(i);
 	}
-	initial_delay = i*1000;
+	initial_delay = write_end_time;
 
+	/*
 	if(write == 0)
 	{
 		write_data = false;
@@ -175,17 +187,7 @@ int main(int argc, char **argv)
 		response_times.push_back(initial_delay + result);
 		count[i]++;
 	}
-	/*
-	bool loop = false;
-	for(unsigned int i=0;i<q_depth;i++)
-	{
-		if(count[i] < req_per_thread)
-		{
-			loop = true;
-			break;
-		}
-	}
-	*/
+	
 
 	while(loop)
 	{
@@ -253,23 +255,12 @@ int main(int argc, char **argv)
 			break;
 		}
 			
-		/*	
-		loop = false;
-		for(unsigned int i=0;i<q_depth;i++)
-		{
-			if(count[i] < req_per_thread)
-			{
-				loop = true;
-				break;
-			}
-		}
-		*/
 		
 	}
-
+	*/
 exit:
 	fprintf(stdout, "========================\n");
-	fprintf(stdout, "experiment ended with write_count as %d\n", write_count);
+	//fprintf(stdout, "experiment ended with write_count as %d\n", write_count);
 	ssd->print_ftl_statistics(stdout);
 	fclose(read_file);
 	fclose(write_file);
