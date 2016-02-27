@@ -24,7 +24,7 @@ def main():
         if num_lines != -1 and count >= num_lines:
             break
         try:
-            latency = float(line.split('\t')[-1][:-1].strip())
+            latency = float(line.split('\t')[1][:-1].strip())
             req_time = float(line.split('\t')[0].strip())
             latencies.append(latency)
             time = req_time + latency

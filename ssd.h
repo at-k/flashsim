@@ -812,6 +812,7 @@ struct ssd_block
   unsigned int valid_page_count;
   unsigned int lifetime_left;
   unsigned int *page_mapping;
+  bool *reserved_page;
   unsigned int last_page_written;
 };
 
@@ -887,12 +888,13 @@ private:
 	unsigned int clean_threshold;
 	bool urgent_cleaning;
 	bool READ_PREFERENCE;
-	std::vector< std::vector<struct ftl_event> >open_events;
+	//std::vector< std::vector<struct ftl_event> >open_events;
 	std::vector< std::vector<struct ftl_event> >background_events;
 	std::vector< std::vector<struct urgent_ftl_event *> >urgent_queues;
 	std::vector< std::vector<struct ssd_block> >bg_cleaning_blocks;
 	std::vector< std::vector<struct urgent_bg_events_pointer> >urgent_bg_events;
 
+	unsigned int *plane_free_times;
 	struct logical_page *logical_page_list;
 	std::list<struct ssd_block> free_block_list;
 	std::list<struct ssd_block> allocated_block_list;
@@ -916,14 +918,15 @@ private:
 	enum status garbage_collect_cached(Event &event);
 	void add_background_event(struct ftl_event event);
 	double process_background_tasks(Event &event);
-	double process_open_events_table(unsigned int plane_num, double time);
-	double process_open_events_table(double time);
+	//double process_open_events_table(unsigned int plane_num, double time);
+	//double process_open_events_table(double time);
 	void populate_queue_len(double time, unsigned int plane_num);
 	double read_(Event &event, bool actual_time = true);
 	double write_(Event &event, bool actual_time = true);
 	void set_urgent_queues(Event &event);
 	double process_urgent_queues(Event &event);
-	//bool compare_ftl_event_start_times(const struct ftl_event a, const struct ftl_event b);
+	void move_urgent_pointers(unsigned int plane_num, unsigned int offset);
+	bool mark_reserved(Address address);
 };
 
 class FtlImpl_Fast : public FtlParent
@@ -1031,8 +1034,8 @@ class Ssd
 public:
 	Ssd (uint ssd_size = SSD_SIZE);
 	~Ssd(void);
-	bool event_arrive(enum event_type type, ulong logical_address, uint size, double start_time, bool &op_complete, double &end_time);
-	bool event_arrive(enum event_type type, ulong logical_address, uint size, double start_time, bool &op_complete, double &end_time, void *buffer);
+	double event_arrive(enum event_type type, ulong logical_address, uint size, double start_time, bool &op_complete, double &end_time);
+	double event_arrive(enum event_type type, ulong logical_address, uint size, double start_time, bool &op_complete, double &end_time, void *buffer);
 	void *get_result_buffer();
 	friend class Controller;
 	void print_statistics();
