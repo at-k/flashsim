@@ -112,8 +112,8 @@ int main(int argc, char **argv)
 	for (i = 0; i < occupied; i++)
 	{
 		write_complete = false;
-		double result = ssd -> event_arrive(WRITE, i%lastLBA, 1, write_end_time, write_complete, write_end_time);
-		if(result == -1)
+		bool result = ssd -> event_arrive(WRITE, i%lastLBA, 1, write_end_time, write_complete, write_end_time);
+		if(result == false)
 		{
 			printf("returning failure\n");
 			return -1;
@@ -161,12 +161,12 @@ int main(int argc, char **argv)
 	bool loop = true;
 	for(unsigned int i=0;i<q_depth;i++)
 	{
-		double result;
+		bool result;
 		if(write_data && i >= q_depth/2)
 		{
 			location = rand()%lastLBA;
 			result = ssd->event_arrive(WRITE, location, 1, (double) op_start_time[i], op_complete[i], op_complete_time[i]);
-			if(result == -1)
+			if(result == false)
 			{
 				fprintf(read_file, "==========\nCould not do a write, incomplete experiment\n");
 				goto exit;
@@ -210,7 +210,8 @@ int main(int argc, char **argv)
 				}
 			}
 		}
-		prev_noop_time = earliest_event < prev_noop_time ? earliest_event : prev_noop_time;
+		if(event_completed)
+			prev_noop_time = earliest_event < prev_noop_time ? earliest_event : prev_noop_time;
 		//printf("event completed %d\n", event_completed);
 		while(!event_completed)
 		{
@@ -228,7 +229,10 @@ int main(int argc, char **argv)
 					}
 				}
 			}
-			prev_noop_time = earliest_event < prev_noop_time ? earliest_event : prev_noop_time;
+			if(event_completed)
+				prev_noop_time = earliest_event < prev_noop_time ? earliest_event : prev_noop_time;
+			else
+				prev_noop_time = next_noop_time;
 			loop_c++;
 		}
 		//for(unsigned int i=0;i<q_depth;i++)
@@ -249,7 +253,7 @@ int main(int argc, char **argv)
 					location = rand()%lastLBA;
 					op_addresses[earliest_event_index] = location;
 					result = ssd->event_arrive(WRITE, location, 1, (double) op_start_time[earliest_event_index], op_complete[earliest_event_index], op_complete_time[earliest_event_index]);
-					if(result == -1)
+					if(result == false)
 					{
 						fprintf(read_file, "==========\nCould not do a write, incomplete experiment\n");
 						goto exit;
@@ -267,7 +271,7 @@ int main(int argc, char **argv)
 					}
 					cur_read_count++;	
 					result = ssd->event_arrive(READ, location, 1, (double) op_start_time[earliest_event_index], op_complete[earliest_event_index], op_complete_time[earliest_event_index]);
-					if(result == -1)	
+					if(result == false)	
 					{
 						fprintf(read_file, "==========\nCould not do a read, incomplete experiment\n");
 						goto exit;

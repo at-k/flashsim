@@ -1034,8 +1034,8 @@ class Ssd
 public:
 	Ssd (uint ssd_size = SSD_SIZE);
 	~Ssd(void);
-	double event_arrive(enum event_type type, ulong logical_address, uint size, double start_time, bool &op_complete, double &end_time);
-	double event_arrive(enum event_type type, ulong logical_address, uint size, double start_time, bool &op_complete, double &end_time, void *buffer);
+	bool event_arrive(enum event_type type, ulong logical_address, uint size, double start_time, bool &op_complete, double &end_time);
+	bool event_arrive(enum event_type type, ulong logical_address, uint size, double start_time, bool &op_complete, double &end_time, void *buffer);
 	void *get_result_buffer();
 	friend class Controller;
 	void print_statistics();

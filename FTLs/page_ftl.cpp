@@ -640,7 +640,10 @@ enum status FtlImpl_Page::read(Event &event, bool &op_complete, double &end_time
 			std::vector<struct urgent_ftl_event *>::iterator first_iterator = urgent_queues[plane_num].begin();
 			struct urgent_ftl_event *first_event = *(first_iterator);
 			if(first_event->event.start_time < fg_read.end_time)
+			{
 				first_event->event.start_time = fg_read.end_time;
+				first_event->event.end_time = fg_read.end_time;
+			}
 		}
 	}
 	else
@@ -680,15 +683,11 @@ enum status FtlImpl_Page::noop(Event &event, bool &op_complete, double &end_time
 		//}
 		//e_time = o_time < e_time ? o_time : e_time;
 		b_time = process_background_tasks(event);
-		e_time = b_time < e_time ? b_time : e_time;
+		//e_time = b_time < e_time ? b_time : e_time;
 		u_time = process_urgent_queues(event);
 		e_time = u_time < e_time ? u_time : e_time;
-		/*
+		
 		printf("=== ");
-		if(o_time == std::numeric_limits<double>::max())
-			printf("MAX ");
-		else
-			printf("%f ", o_time);
 		if(b_time == std::numeric_limits<double>::max())
 			printf("MAX ");
 		else
@@ -697,15 +696,14 @@ enum status FtlImpl_Page::noop(Event &event, bool &op_complete, double &end_time
 			printf("MAX ");
 		else
 			printf("%f ", u_time);
-			*/
+	
 	}
-	/*
+	
 	printf("e time ");
 	if(e_time == std::numeric_limits<double>::max())
 		printf("MAX\n");
 	else
 		printf("%f\n", e_time);
-		*/
 	event.incr_time_taken(e_time - event.get_start_time());
 	end_time = e_time;
 	op_complete = true;
@@ -1248,9 +1246,11 @@ double FtlImpl_Page::process_background_tasks(Event &event)
 		//if(background_events[plane_num].size() > 0)
 		//	printf("%f %f", background_events[plane_num].front().start_time, cur_simulated_time);
 		//printf("\n");
+		if(background_events[plane_num].size() == 0)
+			continue;
 		while(	background_events[plane_num].size() > 0 && 
 				(background_events[plane_num].front().start_time < cur_simulated_time || 
-				 background_events[plane_num].front().start_time == cur_simulated_time && event.get_event_type() == NOOP)
+				 (background_events[plane_num].front().start_time == cur_simulated_time && event.get_event_type() == NOOP))
 				)
 		{
 			pbt_counter++;
@@ -1304,10 +1304,10 @@ double FtlImpl_Page::process_background_tasks(Event &event)
 			}
 			if(urgent_queues[candidate_plane].size() > 0)
 			{
-				std::vector<struct urgent_ftl_event *>::iterator last_urgent_iterator = urgent_queues[candidate_plane].end();
-				--last_urgent_iterator;
+				std::vector<struct urgent_ftl_event *>::iterator last_urgent_iterator = urgent_queues[candidate_plane].begin();
+				last_urgent_iterator;
 				struct urgent_ftl_event *last_urgent_pointer = *(last_urgent_iterator);
-				background_events[plane_num].front().start_time = last_urgent_pointer->event.end_time;
+				background_events[plane_num].front().start_time = last_urgent_pointer->event.start_time;
 				break;
 			}
 			if(perform_first_task && !(urgent_cleaning && first_event.type == WRITE ))
@@ -1509,7 +1509,6 @@ void FtlImpl_Page::set_urgent_queues(Event &event)
 				std::vector<struct urgent_ftl_event *>::iterator last_iterator = urgent_queues[last_plane_num].end();
 				--last_iterator;
 				struct urgent_ftl_event *last_event = *(last_iterator);
-				printf("last event pointer is %p\n", last_event);
 				last_event->child = urgent_bg_erase;
 			}
 			urgent_bg_erase->child = NULL;
@@ -1538,7 +1537,6 @@ void FtlImpl_Page::set_urgent_queues(Event &event)
 		}
 		first = false;
 	}
-	printf("Set UQ size of %d to %d\n", plane_num, urgent_queues[plane_num].size());
 }
 
 
@@ -1606,8 +1604,11 @@ double FtlImpl_Page::process_urgent_queues(Event &event)
 				first_pointer = NULL;
 			}
 		}
-		if(first_pointer && first_pointer->event.start_time < ret_time)
+		if(	first_pointer && first_pointer->event.start_time < ret_time && 
+			first_pointer->parent_completed && first_pointer->predecessor_completed)
+		{
 			ret_time = first_pointer->event.start_time;
+		}
 	}
 	return ret_time;
 }

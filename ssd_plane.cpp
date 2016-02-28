@@ -548,7 +548,7 @@ void Plane::serialize_access(double start_time, double duration, Event &event, b
 	}
 
 	
-		
+	/*	
 	if(event.get_event_type() == READ && remove)
 	{
 		printf("Waits on plane for read of duration %f\n", duration);
@@ -578,7 +578,7 @@ void Plane::serialize_access(double start_time, double duration, Event &event, b
 		printf("Total plane wait time: %f\n", sched_time - start_time);
 		printf("=====================================================\n");
 	}
-	
+	*/
 
 
 	/* write scheduling info in free table slot */

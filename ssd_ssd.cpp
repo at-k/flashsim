@@ -127,7 +127,7 @@ Ssd::~Ssd(void)
 	return;
 }
 
-double Ssd::event_arrive(enum event_type type, ulong logical_address, uint size, double start_time, bool &op_complete, double &end_time)
+bool Ssd::event_arrive(enum event_type type, ulong logical_address, uint size, double start_time, bool &op_complete, double &end_time)
 {
 	return event_arrive(type, logical_address, size, start_time, op_complete, end_time, NULL);
 }
@@ -138,7 +138,7 @@ double Ssd::event_arrive(enum event_type type, ulong logical_address, uint size,
  * 	time (arrive time) of the request
  * The SSD will process the request and return the time taken to process the
  * 	request.  Remember to use the same time units as in the config file. */
-double Ssd::event_arrive(enum event_type type, ulong logical_address, uint size, double start_time, bool &op_complete, double &end_time, void *buffer)
+bool Ssd::event_arrive(enum event_type type, ulong logical_address, uint size, double start_time, bool &op_complete, double &end_time, void *buffer)
 {
 	assert(start_time >= 0.0);
 
@@ -163,13 +163,12 @@ double Ssd::event_arrive(enum event_type type, ulong logical_address, uint size,
 	{
 		fprintf(stderr, "Ssd error: %s: request failed:\n", __func__);
 		event -> print(stderr);
-		return -1;
+		return false;
 	}
-
 	/* use start_time as a temporary for returning time taken to service event */
 	//start_time = event -> get_time_taken();
 	delete event;
-	return end_time;
+	return true;
 }
 
 /*
