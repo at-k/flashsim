@@ -20,7 +20,8 @@ bool Cache::present_in_cache(Event &event, bool actual_time)
 	unsigned int logical_add = event.get_logical_address();
 	std::unordered_map<unsigned int, double>::iterator iter;
 	iter = reverse_map.find(logical_add);
-	return iter != reverse_map.end();
+	bool ret_val = iter != reverse_map.end();
+	return ret_val;
 }
 
 void Cache::place_in_cache(Event &event, bool actual_time)

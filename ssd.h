@@ -890,7 +890,6 @@ private:
 	unsigned int RAW_SSD_BLOCKS, ADDRESSABLE_SSD_PAGES;
 	unsigned int clean_threshold;
 	bool READ_PREFERENCE;
-	//std::vector< std::vector<struct ftl_event> >open_events;
 	std::vector< std::vector<struct ftl_event> >background_events;
 	std::vector< std::vector<struct urgent_ftl_event *> >urgent_queues;
 	std::vector< std::vector<struct ssd_block> >bg_cleaning_blocks;
@@ -927,7 +926,7 @@ private:
 	double write_(Event &event, bool actual_time = true);
 	void set_urgent_queues(Event &event);
 	double process_urgent_queues(Event &event);
-	void move_urgent_pointers(unsigned int plane_num, unsigned int offset);
+	void move_urgent_pointers(unsigned int plane_num, unsigned int start, unsigned int end);
 	bool mark_reserved(Address address, bool is_reserved);
 };
 
