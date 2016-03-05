@@ -50,7 +50,6 @@ Plane::Plane(const Die &parent, uint plane_size, double reg_read_delay, double r
 	last_erase_time(0.0),
 
 	free_blocks(size), 
-
 	/*Flag for storing -1*/
 	PLANE_NOOP(-1)
 {
@@ -547,8 +546,7 @@ void Plane::serialize_access(double start_time, double duration, Event &event, b
 		}
 	}
 
-	
-	/*	
+	/*
 	if(event.get_event_type() == READ && remove)
 	{
 		printf("Waits on plane for read of duration %f\n", duration);
@@ -579,7 +577,6 @@ void Plane::serialize_access(double start_time, double duration, Event &event, b
 		printf("=====================================================\n");
 	}
 	*/
-
 
 	/* write scheduling info in free table slot */
 	lock_times lt;

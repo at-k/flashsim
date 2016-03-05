@@ -43,7 +43,6 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller):FtlParent(controller),
 	RAW_SSD_BLOCKS(SSD_SIZE*PACKAGE_SIZE*DIE_SIZE*PLANE_SIZE),
 	ADDRESSABLE_SSD_PAGES(NUMBER_OF_ADDRESSABLE_BLOCKS * BLOCK_SIZE),
 	clean_threshold(float(OVERPROVISIONING)/100 * SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * PLANE_SIZE),
-	urgent_cleaning(false),
 	READ_PREFERENCE(true),
 	//open_events(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE), 
 	background_events(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE), 
@@ -73,6 +72,7 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller):FtlParent(controller),
 			new_ssd_block.reserved_page[i] = false;
 		}
 		new_ssd_block.last_page_written = 0;
+		new_ssd_block.scheduled_for_urgent_erasing = false;
 		free_block_list.push_back(new_ssd_block);
 		next_block_lba = get_next_block_lba(next_block_lba);
 		if(next_block_lba == 0)
@@ -151,6 +151,8 @@ Address FtlImpl_Page::get_next_block_pba(Address pba)
 
 double FtlImpl_Page::get_average_age(struct ssd_block block)
 {
+	if(block.scheduled_for_urgent_erasing)
+		assert(false);
 	double average_age = 0;
 	Address supposed_address = block.physical_address;
 	for(unsigned int i=0;i<BLOCK_SIZE;i++)
@@ -237,6 +239,9 @@ unsigned int FtlImpl_Page::get_logical_block_num(unsigned int lba)
 
 Address FtlImpl_Page::find_write_location(Event &event, Address cur, bool *already_open)
 {
+	printf("Finding write address, current is ");
+	cur.print();
+	printf("\n");
 	Address ret_address;
 	Address possible_ret_address;
 	ret_address.valid = NONE;
@@ -253,9 +258,10 @@ Address FtlImpl_Page::find_write_location(Event &event, Address cur, bool *alrea
 	//{
 	//	queue_len_computed[i] = false;
 	//}
+	printf("numver of allocated blocks is %d\n", allocated_block_list.size());
 	for(iter=allocated_block_list.begin();iter!=allocated_block_list.end();)
 	{
-		if((*iter).last_page_written == BLOCK_SIZE - 1)
+		if((*iter).last_page_written == BLOCK_SIZE - 1 && !(*iter).scheduled_for_urgent_erasing)
 		{
 			struct ssd_block filled_block;
 			filled_block.physical_address = iter->physical_address;
@@ -263,24 +269,33 @@ Address FtlImpl_Page::find_write_location(Event &event, Address cur, bool *alrea
 			filled_block.valid_page_count = iter->valid_page_count;
 			filled_block.lifetime_left = iter->lifetime_left;
 			filled_block.last_page_written = iter->last_page_written;
+			filled_block.scheduled_for_urgent_erasing = iter->scheduled_for_urgent_erasing;
 			filled_block.page_mapping = (unsigned int *)malloc(BLOCK_SIZE * sizeof(unsigned int));
 			filled_block.reserved_page = (bool *)malloc(BLOCK_SIZE * sizeof(bool));
 			for(unsigned int k=0;k<BLOCK_SIZE;k++)
 			{
 				filled_block.page_mapping[k] = (iter->page_mapping)[k];
 				filled_block.reserved_page[k] = (iter->reserved_page)[k];
+				assert(!filled_block.reserved_page[k]);
 			}
 			filled_block_list.push_back(filled_block);
 			iter = allocated_block_list.erase(iter);
 			continue;
 		}
+			printf("Considering block address ");
+			iter->physical_address.print();
+			printf("\n");
 		unsigned int unreserved_page_num = (*iter).last_page_written + 1;
 		while(unreserved_page_num <= BLOCK_SIZE - 1 && (*iter).reserved_page[unreserved_page_num])
 		{
+			printf("%d %d\n", unreserved_page_num, (*iter).reserved_page[unreserved_page_num]);
 			unreserved_page_num++;
 		}
 		if(unreserved_page_num > BLOCK_SIZE - 1)
 		{
+			printf("block address ");
+			iter->physical_address.print();
+			printf(" is unable to participate because its all reserved\n");
 			iter++;
 			continue;
 		}
@@ -330,6 +345,7 @@ Address FtlImpl_Page::find_write_location(Event &event, Address cur, bool *alrea
 		ret_address.valid = PAGE;
 		*already_open = true;
 	}
+	printf("free block list size is %d\n", free_block_list.size());
 	if(!(found_block && min_wait_time <= event.get_start_time()))
 	{
 		std::list<struct ssd_block>::iterator free_iter, min_iter = free_block_list.end();
@@ -416,6 +432,7 @@ bool FtlImpl_Page::increment_log_write_address(Event &event, Address asked_for, 
 
 bool FtlImpl_Page::allocate_new_block(Address requested_address)
 {
+	printf("free list size is %d\n", free_block_list.size());
 	if(free_block_list.size() == 0)
 	{
 		printf("here returning false from allocate\n");
@@ -457,12 +474,27 @@ bool FtlImpl_Page::allocate_new_block(Address requested_address)
 		log_write_address.valid = PAGE;
 		ret_val = true;
 	}
+			printf("ANB reserved count for ");
+			allocated_block_list.back().physical_address.print();
+			printf("  ");
+			int rcount = 0;
+			for(unsigned int kk=0;kk<BLOCK_SIZE;kk++)
+			{
+				if(allocated_block_list.back().reserved_page[kk])
+					rcount = 0;
+			}
+			printf("%d\n", rcount);
 	return ret_val;
 }
 
 bool compare_ftl_event_start_times(const struct ftl_event a, const struct ftl_event b) 
 {
 	return a.start_time < b.start_time;
+}
+
+bool compare_possible_erase_blocks(const std::pair<unsigned int, float> a, const std::pair<unsigned int, float> b)
+{
+	return a.second > b.second;
 }
 
 //double FtlImpl_Page::process_open_events_table(double start_time)
@@ -737,8 +769,12 @@ enum status FtlImpl_Page::write(Event &event, bool &op_complete, double &end_tim
 	Address write_address = event.get_address();
 	fg_write.physical_address = write_address;
 	unsigned int plane_num = write_address.package*PACKAGE_SIZE*DIE_SIZE + write_address.die*DIE_SIZE + write_address.plane;
+	printf("Application write address set to ");
+	write_address.print();
+	printf("\n");
 	if(urgent_queues[plane_num].size() == 0)
 	{
+		printf("Being written now\n");
 		fg_write.end_time = write_(event, actual_time);
 		op_complete = true;
 		end_time = fg_write.end_time;
@@ -747,14 +783,25 @@ enum status FtlImpl_Page::write(Event &event, bool &op_complete, double &end_tim
 	}
 	else
 	{
+		printf("Being scheduled for later\n");
 		fg_write.end_time = fg_write.start_time;
-		mark_reserved(fg_write.physical_address);
+		mark_reserved(fg_write.physical_address, true);
 		struct urgent_ftl_event *stalled_fg_write = (struct urgent_ftl_event *)malloc(sizeof(struct urgent_ftl_event));
 		stalled_fg_write->event = fg_write;
 		stalled_fg_write->child = NULL;
 		stalled_fg_write->parent_completed = true;
 		stalled_fg_write->predecessor_completed = false;
+		stalled_fg_write->write_from_address = logical_page_list[fg_write.logical_address].physical_address; 
 		urgent_queues[plane_num].push_back(stalled_fg_write);	
+		if(gc_required)
+		{
+			garbage_collect(event);
+			if(free_block_list.size() == 0)
+			{
+				printf("here 1\n");
+				set_urgent_queues(event);
+			}
+		}
 	}
 	//if(actual_time)
 	//{
@@ -798,8 +845,47 @@ double FtlImpl_Page::write_(Event &event, bool actual_time)
 			if(iter->physical_address == currently_mapped_block_address)
 			{
 				iter->valid_page_count -= 1;
+				printf("Decrementing the valid page count of ");
+				iter->physical_address.print();
+				printf(" to %d\n", iter->valid_page_count);
 				need_invalidation = false;
 				break;
+			}
+		}
+	}
+	if(need_invalidation)
+	{
+		for(iter=free_block_list.begin();iter!=free_block_list.end();iter++)
+		{
+			if(iter->physical_address == currently_mapped_block_address)
+			{
+				printf("Decrementing the valid page count of ");
+				iter->physical_address.print();
+				printf(" to %d from the free block list\n", iter->valid_page_count);
+				fflush(stdout);
+				assert(iter->scheduled_for_urgent_erasing);
+				iter->valid_page_count -= 1;
+				need_invalidation = false;
+				break;
+			}
+		}
+	}
+	if(need_invalidation)
+	{
+		unsigned int currently_mapped_plane = currently_mapped_block_address.package*PACKAGE_SIZE*DIE_SIZE + currently_mapped_block_address.die*DIE_SIZE + currently_mapped_block_address.plane;
+		std::vector<struct ssd_block>::iterator bg_iter;
+		for(bg_iter=bg_cleaning_blocks[currently_mapped_plane].begin();bg_iter!=bg_cleaning_blocks[currently_mapped_plane].end();bg_iter++)
+		{
+			if(bg_iter->physical_address == currently_mapped_block_address)
+			{
+				printf("Decrementing the valid page count of ");
+				bg_iter->physical_address.print();
+				printf(" to %d from the bg block list\n", iter->valid_page_count);
+				fflush(stdout);
+				bg_iter->valid_page_count -= 1;
+				need_invalidation = false;
+				break;
+
 			}
 		}
 	}
@@ -815,6 +901,9 @@ double FtlImpl_Page::write_(Event &event, bool actual_time)
 		if(need_invalidation && iter->physical_address == currently_mapped_block_address)
 		{
 			iter->valid_page_count -= 1;
+			printf("Decrementing the valid page count of ");
+			iter->physical_address.print();
+			printf(" to %d\n", iter->valid_page_count);
 			need_invalidation = false;
 			if(identified)
 				break;
@@ -822,18 +911,26 @@ double FtlImpl_Page::write_(Event &event, bool actual_time)
 	}
 	event.set_address(write_address);
 	controller.stats.numWrite++;
+	printf("Issuing write at ");
+	write_address.print();
 	controller.issue(event, actual_time);
 	logical_page_list[logical_page_num].physical_address = write_address;
 	(*log_write_iter).last_write_time = latest_write_time++;    
 	(*log_write_iter).valid_page_count += 1;
+	printf(" and set it valid page count to %d\n", log_write_iter->valid_page_count);
+	fflush(stdout);
 	(*log_write_iter).page_mapping[write_address.page] = logical_page_num;  
 	(*log_write_iter).reserved_page[write_address.page] = false;  
+	printf("Set page reserved ");
+	write_address.print();
+	printf("to false\n");
 	(*log_write_iter).last_page_written = write_address.page;
 	if(gc_required)
 	{
 		garbage_collect(event);
 		if(free_block_list.size() == 0)
 		{
+			printf("here 2\n");
 			set_urgent_queues(event);
 		}
 	}
@@ -849,6 +946,16 @@ enum status FtlImpl_Page::trim(Event &event)
 enum status FtlImpl_Page::garbage_collect(Event &event)
 {
 	enum status ret_status;
+	unsigned int total_bg_cleaning_blocks = 0;
+
+	for(unsigned int i=0;i<SSD_SIZE*PACKAGE_SIZE*DIE_SIZE;i++)
+	{
+		total_bg_cleaning_blocks += bg_cleaning_blocks[i].size();
+	}
+	if(total_bg_cleaning_blocks >= MAX_GC_BLOCKS)
+	{
+		return FAILURE;
+	}
 	switch(GC_SCHEME)
 	{
 		case(0):
@@ -901,31 +1008,33 @@ enum status FtlImpl_Page::garbage_collect_default(Event &event)
 	average_lifetime_left = average_lifetime_left/(double)(RAW_SSD_BLOCKS);
 	*/
 	
-	unsigned int total_bg_cleaning_blocks = 0;
-
-	for(unsigned int i=0;i<SSD_SIZE*PACKAGE_SIZE*DIE_SIZE;i++)
-	{
-		total_bg_cleaning_blocks += bg_cleaning_blocks[i].size();
-	}
-	if(total_bg_cleaning_blocks >= 5)//SSD_SIZE*PACKAGE_SIZE*DIE_SIZE)
-		return FAILURE;
 
 	for(iter=allocated_block_list.begin();iter!=allocated_block_list.end();)
 	{
+		if(iter->scheduled_for_urgent_erasing)
+		{
+			iter++;
+			continue;
+		}
 		if(iter->last_page_written == BLOCK_SIZE - 1)
 		{
+			printf("Moving block addressed ");
+			iter->physical_address.print();
+			printf("to the dark sise with valid count %d\n", iter->valid_page_count);
 			struct ssd_block filled_block;
 			filled_block.physical_address = iter->physical_address;
 			filled_block.last_write_time = iter->last_write_time;
 			filled_block.valid_page_count = iter->valid_page_count;
 			filled_block.lifetime_left = iter->lifetime_left;
 			filled_block.last_page_written = iter->last_page_written;
+			filled_block.scheduled_for_urgent_erasing = iter->scheduled_for_urgent_erasing;
 			filled_block.page_mapping = (unsigned int *)malloc(BLOCK_SIZE * sizeof(unsigned int));
 			filled_block.reserved_page = (bool *)malloc(BLOCK_SIZE * sizeof(bool));
 			for(unsigned int k=0;k<BLOCK_SIZE;k++)
 			{
 				filled_block.page_mapping[k] = (iter->page_mapping)[k];
 				filled_block.reserved_page[k] = (iter->reserved_page)[k];
+				assert(!filled_block.reserved_page[k]);
 			}
 			filled_block_list.push_back(filled_block);
 			iter = allocated_block_list.erase(iter);
@@ -1010,7 +1119,6 @@ enum status FtlImpl_Page::garbage_collect_default(Event &event)
 			bg_read.op_complete_pointer = NULL;
 			bg_read.end_time_pointer = NULL;
 			background_events[plane_num].push_back(bg_read);
-			urgent_bg_events_location.rw_end_index = background_events[plane_num].size();
 			struct ftl_event bg_write;
 			bg_write.type = WRITE;
 			bg_write.physical_address = cur_page_address;
@@ -1024,6 +1132,7 @@ enum status FtlImpl_Page::garbage_collect_default(Event &event)
 			clean_pages_found = true;
 		}
 	}
+	urgent_bg_events_location.rw_end_index = background_events[plane_num].size();
 	urgent_bg_events_location.erase_index = background_events[plane_num].size();
 	struct ftl_event bg_erase;
 	bg_erase.type = ERASE;
@@ -1037,7 +1146,25 @@ enum status FtlImpl_Page::garbage_collect_default(Event &event)
 
 	background_events[plane_num].push_back(bg_erase);
 	filled_block_list.erase(max_benefit_block_reference);
+	printf("Setting up ");
+	block_to_clean.physical_address.print();
+	printf("for cleaning with valid page count %d\n", block_to_clean.valid_page_count);
+	std::vector<struct ftl_event>::iterator temp = background_events[plane_num].begin();
+	for(;temp!=background_events[plane_num].end();temp++)
+	{
+		printf("Type %d Address ", temp->type);
+		temp->physical_address.print();
+		printf("\n");
+	}
 	bg_cleaning_blocks[plane_num].push_back(block_to_clean);
+			printf("GC reserved count ");
+			int rcount = 0;
+			for(unsigned int kk=0;kk<BLOCK_SIZE;kk++)
+			{
+				if(block_to_clean.reserved_page[kk])
+					rcount = 0;
+			}
+			printf("%d\n", rcount);
 	urgent_bg_events[plane_num].push_back(urgent_bg_events_location);
 	return SUCCESS;
 }
@@ -1078,8 +1205,14 @@ enum status FtlImpl_Page::garbage_collect_cached(Event &event)
 	average_lifetime_left = average_lifetime_left/(double)(RAW_SSD_BLOCKS);
 	*/
 	
+
 	for(iter=allocated_block_list.begin();iter!=allocated_block_list.end();)
 	{
+		if(iter->scheduled_for_urgent_erasing)
+		{
+			iter++;
+			continue;
+		}
 		if(iter->last_page_written == BLOCK_SIZE - 1)
 		{
 			struct ssd_block filled_block;
@@ -1088,6 +1221,7 @@ enum status FtlImpl_Page::garbage_collect_cached(Event &event)
 			filled_block.valid_page_count = iter->valid_page_count;
 			filled_block.lifetime_left = iter->lifetime_left;
 			filled_block.last_page_written = iter->last_page_written;
+			filled_block.scheduled_for_urgent_erasing = iter->scheduled_for_urgent_erasing;
 			filled_block.page_mapping = (unsigned int *)malloc(BLOCK_SIZE * sizeof(unsigned int));
 			for(unsigned int k=0;k<BLOCK_SIZE;k++)
 			{
@@ -1102,7 +1236,7 @@ enum status FtlImpl_Page::garbage_collect_cached(Event &event)
 			iter++;
 		}
 	}
-	
+	//TODO Use a policy that takes into account that multiple blocks are gonna be erased
 	for(iter=filled_block_list.begin();iter!=filled_block_list.end();iter++)
 	{
 		float utilization = (float)iter->valid_page_count/(float)BLOCK_SIZE;
@@ -1132,7 +1266,6 @@ enum status FtlImpl_Page::garbage_collect_cached(Event &event)
 	struct ssd_block target_block = *max_benefit_block_reference;
 	Address target_block_address = target_block.physical_address;
 	unsigned int target_plane = target_block_address.package*PACKAGE_SIZE*DIE_SIZE + target_block_address.die*DIE_SIZE + target_block_address.plane;
-	std::list<struct ssd_block>::iterator target_block_iterator;
 
 	//TODO set the bg events correctly
 	bool clean_pages_found = false;
@@ -1164,21 +1297,60 @@ enum status FtlImpl_Page::garbage_collect_cached(Event &event)
 		}
 	}
 
+	//TODO this can be used to account for multiple schedule_secondary_writes
 	struct urgent_bg_events_pointer urgent_bg_events_location;
+
+	std::pair<unsigned int, float> possible_erase_blocks[PLANE_SIZE];
+	unsigned int possible_erase_blocks_index = 0;
+
 	for(iter = filled_block_list.begin();iter!=filled_block_list.end();iter++)
 	{
-		bool schedule_writes = false;
 		Address iter_address = iter->physical_address;
 		if( iter->physical_address.package == target_block_address.package && 
 			iter->physical_address.die == target_block_address.die &&
 			iter->physical_address.plane == target_block_address.plane
 			)
 		{
-			if(iter->physical_address.block == target_block_address.block)
+			if(!iter->physical_address.block == target_block_address.block)
 			{
-				target_block_iterator = iter;
+				float utilization = (float)iter->valid_page_count/(float)BLOCK_SIZE;
+				if(iter->valid_page_count == BLOCK_SIZE)
+				{
+					continue;
+				}
+				double age = get_average_age(*iter);
+				cur_benefit = (1.0 - utilization)*(float)age / (1.0 + utilization);
+				possible_erase_blocks[possible_erase_blocks_index] = std::pair<unsigned int, float>(std::distance(iter, filled_block_list.begin()), cur_benefit);
+				possible_erase_blocks_index++;
+			}
+		}
+	}
+
+	std::vector<unsigned int> erase_block_list;
+	std::sort(possible_erase_blocks, possible_erase_blocks + possible_erase_blocks_index, compare_possible_erase_blocks);
+	//TODO hardcoded "magic" number 25
+	for(unsigned int top_candidate = 0;top_candidate < 25;top_candidate++)
+		erase_block_list.push_back(possible_erase_blocks[top_candidate].first);
+
+	//TODO this can be optimized in terms of runtime because we already know the indexes which correspond to the target plane
+	for(iter = filled_block_list.begin();iter!=filled_block_list.end();iter++)
+	{
+		bool schedule_writes = false;
+		bool schedule_secondary_writes = false;
+		Address iter_address = iter->physical_address;
+		if( iter->physical_address.package == target_block_address.package && 
+			iter->physical_address.die == target_block_address.die &&
+			iter->physical_address.plane == target_block_address.plane
+			)
+		{
+			if(iter->physical_address.block == target_block_address.block)  
+			{
 				schedule_writes = true;
 				urgent_bg_events_location.rw_start_index = background_events[target_plane].size();
+			}
+			if(std::find(erase_block_list.begin(), erase_block_list.end(), std::distance(iter, filled_block_list.begin())) != erase_block_list.end())
+			{
+				schedule_secondary_writes = true;
 			}
 			Address cur_page_address = iter->physical_address;
 			cur_page_address.valid = PAGE;
@@ -1193,8 +1365,11 @@ enum status FtlImpl_Page::garbage_collect_cached(Event &event)
 					bg_read.logical_address = (iter->page_mapping)[i];
 					bg_read.start_time = event.get_start_time();
 					bg_read.end_time = 0;
+					bg_read.process = BACKGROUND;
+					bg_read.op_complete_pointer = NULL;
+					bg_read.end_time_pointer = NULL;
 					background_events[target_plane].push_back(bg_read);
-					if(schedule_writes)
+					if(schedule_writes || schedule_secondary_writes)
 					{
 						struct ftl_event bg_write;
 						bg_write.type = WRITE;
@@ -1202,6 +1377,9 @@ enum status FtlImpl_Page::garbage_collect_cached(Event &event)
 						bg_write.logical_address = (iter->page_mapping)[i];
 						bg_write.start_time = 0;
 						bg_write.end_time = 0;
+						bg_write.process = BACKGROUND;
+						bg_write.op_complete_pointer = NULL;
+						bg_write.end_time_pointer = NULL;
 						background_events[target_plane].push_back(bg_write);
 					}
 					clean_pages_found = true;
@@ -1221,6 +1399,9 @@ enum status FtlImpl_Page::garbage_collect_cached(Event &event)
 	else
 		bg_erase.start_time = event.get_start_time();
 	bg_erase.end_time = 0;
+	bg_erase.process = BACKGROUND;
+	bg_erase.op_complete_pointer = NULL;
+	bg_erase.end_time_pointer = NULL;
 
 	background_events[target_plane].push_back(bg_erase);
 	filled_block_list.erase(max_benefit_block_reference);
@@ -1236,6 +1417,7 @@ double FtlImpl_Page::process_background_tasks(Event &event)
 {
 	double ret_time = std::numeric_limits<double>::max();
 	double cur_simulated_time = event.get_start_time();
+	bool urgent_cleaning = false;
 	if(free_block_list.size() == 0)
 	{
 		urgent_cleaning = true;
@@ -1328,6 +1510,9 @@ double FtlImpl_Page::process_background_tasks(Event &event)
 					Event bg_write(first_event.type, first_event.logical_address, 1, first_event.start_time);
 					increment_log_write_address(bg_write, candidate_address, write_address_already_open, true); 
 					first_event.physical_address = log_write_address;
+					printf("Issuing bg write with address ");
+					log_write_address.print();
+					printf("\n");
 					bg_write.set_address(log_write_address);
 					task_time = write_(bg_write, false);
 					first_event.end_time = task_time;
@@ -1351,11 +1536,23 @@ double FtlImpl_Page::process_background_tasks(Event &event)
 					block_to_clean.valid_page_count = 0;
 					block_to_clean.last_page_written = 0;
 					block_to_clean.lifetime_left -= 1;
+					block_to_clean.scheduled_for_urgent_erasing = false;
+					printf("PBT freed the block at address ");
+					block_to_clean.physical_address.print();
+					printf("and added it to the free list\n");
 					free_block_list.push_back(block_to_clean);
 					if(free_block_list.size() > clean_threshold)
 					{
 						gc_required = false;
 					}
+			printf("PBT reserved count ");
+			int rcount = 0;
+			for(unsigned int kk=0;kk<BLOCK_SIZE;kk++)
+			{
+				if(block_to_clean.reserved_page[kk])
+					rcount = 0;
+			}
+			printf("%d\n", rcount);
 					bg_cleaning_blocks[plane_num].erase(bg_cleaning_blocks[plane_num].begin());
 					urgent_bg_events[plane_num].erase(urgent_bg_events[plane_num].begin());
 					is_erase = true;
@@ -1387,12 +1584,16 @@ double FtlImpl_Page::process_background_tasks(Event &event)
 		}
 	}
 	if(urgent_cleaning)
+	{
+		printf("here 3\n");
 		set_urgent_queues(event);
+	}
 	return ret_time;
 }
 
 void FtlImpl_Page::set_urgent_queues(Event &event)
 {
+	bool urgent_cleaning = true;
 	unsigned int urgent_cleaning_plane;
 	unsigned int min_ops_required = UINT_MAX;
 	for(unsigned int plane_num=0;plane_num<SSD_SIZE*PACKAGE_SIZE*DIE_SIZE;plane_num++)
@@ -1400,15 +1601,20 @@ void FtlImpl_Page::set_urgent_queues(Event &event)
 		if(urgent_bg_events[plane_num].size() == 0)
 			continue;
 		unsigned int num_ops = urgent_bg_events[plane_num].front().rw_end_index - urgent_bg_events[plane_num].front().rw_start_index;
+		printf("min ops required for %d are %d\n", plane_num, num_ops);
 		if(num_ops < min_ops_required)
 		{
+			printf("inside the if\n");
 			min_ops_required = num_ops;
 			urgent_cleaning_plane = plane_num;
 		}
 	}	
 
 	if(min_ops_required == UINT_MAX)
+	{
+		printf("returning because no mon ops found\n");
 		return;
+	}
 
 	unsigned int plane_num = urgent_cleaning_plane;
 
@@ -1426,11 +1632,14 @@ void FtlImpl_Page::set_urgent_queues(Event &event)
 	std::vector<struct ftl_event>::iterator erase_pointer = background_events[plane_num].begin();
 	std::advance(erase_pointer, urgent_bg_events_location.erase_index);
 
+	std::vector<struct ftl_event>::iterator pointer = background_events[plane_num].begin();
+
 
 	background_events[plane_num].erase(rw_end_pointer, erase_pointer);
 	background_events[plane_num].erase(begin_pointer, rw_start_pointer);
 	unsigned int num_elems_erased = (urgent_bg_events_location.erase_index - urgent_bg_events_location.rw_end_index) + urgent_bg_events_location.rw_start_index;
 
+	printf("Moving non zero %d number of elements, ibg_events size is %d and urgent_cleaning is %d\n", num_elems_erased, background_events[plane_num].size(), urgent_cleaning);
 	move_urgent_pointers(plane_num, num_elems_erased);
 	
 	background_events[plane_num].front().start_time = first_event_start_time;
@@ -1441,12 +1650,14 @@ void FtlImpl_Page::set_urgent_queues(Event &event)
 		struct ftl_event first_event = background_events[plane_num].front();
 		first_event.start_time = time;
 
+		printf("Head event type is %d\n", first_event.type);
 		sut_counter++;
 		move_urgent_pointers(plane_num, 1);
 		if(first_event.type != ERASE && 
 			!(logical_page_list[first_event.logical_address].physical_address == first_event.physical_address) )
 		{
 			//TODO write NOOP
+			printf("ommiting this one because not required\n");
 			background_events[plane_num].erase(background_events[plane_num].begin());
 			if(background_events[plane_num].size() > 0)
 				background_events[plane_num].front().start_time = first_event.start_time;
@@ -1458,6 +1669,9 @@ void FtlImpl_Page::set_urgent_queues(Event &event)
 			if(plane_free_times[plane_num] > time)
 				first_event.start_time = plane_free_times[plane_num];
 			first_event.end_time = first_event.start_time;
+			printf("Setting up read from address ");
+			first_event.physical_address.print();
+			printf("for urgent bg write\n");
 			struct urgent_ftl_event *urgent_bg_read = (struct urgent_ftl_event *)malloc(sizeof(struct urgent_ftl_event));
 			urgent_bg_read->event = first_event;
 			urgent_bg_read->parent_completed = true;
@@ -1472,9 +1686,15 @@ void FtlImpl_Page::set_urgent_queues(Event &event)
 			bool write_address_already_open;
 			Event probable_bg_write(WRITE, first_event.logical_address, 1, first_event.start_time);
 			candidate_address = find_write_location(probable_bg_write, log_write_address, &write_address_already_open);
+			printf("candidate address is ");
+			candidate_address.print();
+			printf("and already allocated is %d\n", write_address_already_open);
 			increment_log_write_address(probable_bg_write, candidate_address, write_address_already_open, true);
 			first_event.physical_address = log_write_address;
-			if(!mark_reserved(log_write_address))
+			printf("Setting up address ");
+			log_write_address.print();
+			printf("for urgent bg write\n");
+			if(!mark_reserved(log_write_address, true))
 				printf("ERROR!!\n");
 			unsigned int log_write_plane = log_write_address.package*PACKAGE_SIZE*DIE_SIZE + log_write_address.die*DIE_SIZE + log_write_address.plane;
 			if(plane_free_times[log_write_plane] > time)
@@ -1492,6 +1712,7 @@ void FtlImpl_Page::set_urgent_queues(Event &event)
 				last_event->child = urgent_bg_write;
 			}
 			urgent_bg_write->child = NULL;
+			urgent_bg_write->write_from_address = logical_page_list[first_event.logical_address].physical_address;
 			urgent_queues[log_write_plane].push_back(urgent_bg_write);
 			last_plane_num = log_write_plane;
 		}
@@ -1502,6 +1723,9 @@ void FtlImpl_Page::set_urgent_queues(Event &event)
 			first_event.end_time = first_event.start_time;
 			struct urgent_ftl_event *urgent_bg_erase = (struct urgent_ftl_event *)malloc(sizeof(struct urgent_ftl_event));
 			urgent_bg_erase->event = first_event;
+			printf("Setting up address ");
+			first_event.physical_address.print();
+			printf("for urgent bg erase\n");
 			urgent_bg_erase->predecessor_completed = urgent_queues[plane_num].size() == 0 ? true : false;
 			urgent_bg_erase->parent_completed = first ? true : false;
 			if(!first)
@@ -1514,10 +1738,23 @@ void FtlImpl_Page::set_urgent_queues(Event &event)
 			urgent_bg_erase->child = NULL;
 			urgent_queues[plane_num].push_back(urgent_bg_erase);
 			struct ssd_block block_to_clean = bg_cleaning_blocks[plane_num].front();
-			block_to_clean.valid_page_count = 0;
+			//block_to_clean.valid_page_count = ;
 			block_to_clean.last_page_written = 0;
-			block_to_clean.lifetime_left -= 1;
+			//block_to_clean.lifetime_left -= 1;
+			block_to_clean.scheduled_for_urgent_erasing = true;
 			free_block_list.push_back(block_to_clean);
+			printf("Marking address ");
+			block_to_clean.physical_address.print();
+			printf("as free for consumption\n");
+			printf("free block list now becomes %d size\n", free_block_list.size());
+			printf("reserved count ");
+			int rcount = 0;
+			for(unsigned int kk=0;kk<BLOCK_SIZE;kk++)
+			{
+				if(block_to_clean.reserved_page[kk])
+					rcount = 0;
+			}
+			printf("%d\n", rcount);
 			if(free_block_list.size() > clean_threshold)
 			{
 				gc_required = false;
@@ -1529,9 +1766,11 @@ void FtlImpl_Page::set_urgent_queues(Event &event)
 		}
 	
 		background_events[plane_num].erase(background_events[plane_num].begin());
+		printf("remaining size %d\n", background_events[plane_num].size());
 		if(urgent_cleaning && is_erase)
 		{
 			//TODO low watermark
+			printf("setting urgent cleaning to false\n");
 			urgent_cleaning = false;
 			break;
 		}
@@ -1559,25 +1798,84 @@ double FtlImpl_Page::process_urgent_queues(Event &event)
 		{
 			puq_counter++;
 			struct ftl_event first_event = first_pointer->event;
-			Event e(first_event.type, first_event.logical_address, 1, first_event.start_time);		
-			e.set_address(first_event.physical_address);
+			bool requires_processing = true;
 			double next_event_time;
-			if(first_event.type == ERASE)
+			if(	(first_event.type == READ && 
+				!(logical_page_list[first_event.logical_address].physical_address == first_event.physical_address))
+				||	
+				(first_event.type == WRITE && 
+				!(logical_page_list[first_event.logical_address].physical_address == first_pointer->write_from_address))
+				)
 			{
-				controller.issue(e, false);
-				next_event_time = e.get_total_time();
-				first_event.end_time = next_event_time;
-				controller.stats.numErase++;
+				//TODO write NOOP
+				printf("ommiting this one because not required\n");
+				requires_processing = false;
+				first_event.end_time = first_event.start_time;
+				next_event_time = first_event.start_time;
+				if(first_event.type == WRITE)
+				{
+					mark_reserved(first_event.physical_address, false);
+				}
 			}
-			else if(first_event.type == READ)
+			if(requires_processing)
 			{
-				next_event_time = read_(e, false);
-				first_event.end_time = next_event_time;
-			}
-			else if(first_event.type == WRITE)
-			{
-				next_event_time = write_(e, false);
-				first_event.end_time = next_event_time;
+				printf("%d for %d at ", first_event.type, first_event.logical_address);
+				first_event.physical_address.print();
+				printf("\n");
+				Event e(first_event.type, first_event.logical_address, 1, first_event.start_time);		
+				e.set_address(first_event.physical_address);
+				if(first_event.type == ERASE)
+				{
+					std::list<struct ssd_block>::iterator iter = free_block_list.begin();
+					for(;iter!=free_block_list.end();iter++)
+					{
+						if(iter->physical_address == e.get_address())
+						{
+							assert(iter->scheduled_for_urgent_erasing);
+							if(iter->valid_page_count != 0)
+								printf("THIS IS WRONG for plane %d\n", plane_num);//This can be fixed by decrementing the valid page count from the bg_cleaning_blocks list
+							break;
+						}
+					}
+					if(iter == free_block_list.end())
+					{
+						iter = allocated_block_list.begin();
+						for(;iter!=allocated_block_list.end();iter++)
+						{
+							if(iter->physical_address == e.get_address())
+							{
+								assert(iter->scheduled_for_urgent_erasing);
+								if(iter->valid_page_count != 0)
+									printf("THIS IS WRONG for plane %d\n", plane_num);
+								break;
+							}
+						}
+					}
+					assert(iter != allocated_block_list.end());
+					if(iter->valid_page_count > 0)
+					{
+						first_pointer->event.start_time = time;
+						printf("Needed to break and set the new time to %f\n", first_pointer->event.start_time);
+						break;
+					}
+					printf("Finally get to erase\n");
+					controller.issue(e, false);
+					next_event_time = e.get_total_time();
+					iter->lifetime_left -= 1;
+					iter->scheduled_for_urgent_erasing = false;
+					first_event.end_time = next_event_time;
+					controller.stats.numErase++;
+				}
+				else if(first_event.type == READ)
+				{
+					next_event_time = read_(e, false);
+					first_event.end_time = next_event_time;
+				}
+				else if(first_event.type == WRITE)
+				{
+					next_event_time = write_(e, false);
+					first_event.end_time = next_event_time;
+				}
 			}
 			//open_events[plane_num].push_back(first_event);
 			if(first_event.op_complete_pointer)
@@ -1653,7 +1951,7 @@ void FtlImpl_Page::move_urgent_pointers(unsigned int plane_num, unsigned int off
 	}
 }
 
-bool FtlImpl_Page::mark_reserved(Address address)
+bool FtlImpl_Page::mark_reserved(Address address, bool is_reserved)
 {
 	std::list<struct ssd_block>::iterator iter;
 	Address block_address = address;
@@ -1663,7 +1961,10 @@ bool FtlImpl_Page::mark_reserved(Address address)
 	{
 		if(iter->physical_address == block_address)
 		{
-			iter->reserved_page[address.page] = true;
+			iter->reserved_page[address.page] = is_reserved;
+			printf("Setting page reserved ");
+			address.print();
+			printf("to %d\n", is_reserved);
 			return true;
 		}
 	}

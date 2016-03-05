@@ -8,7 +8,7 @@ def main():
     root_folder = sys.argv[1]
     filename_array = []
     percentiles = [50, 90, 99, 99.9, 100];
-    threads = [2, 4, 8, 16, 32]
+    threads = [2, 4, 8, 16, 32, 64, 128]
 
     data_file = open(root_folder + 'data_file_90.dat', 'w')
     for n_threads in threads:
@@ -22,7 +22,7 @@ def main():
 
             rw_latencies = []
             for line in rw_file:
-                rw_latencies.append(float(line.split()[-1].strip()))
+                rw_latencies.append(float(line.split()[1].strip()))
             
             for p in percentiles:
                 repeated_latency_array[p].append(numpy.percentile(rw_latencies, p)/1000.0)

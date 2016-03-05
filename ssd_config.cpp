@@ -138,6 +138,7 @@ uint MAP_DIRECTORY_SIZE = 0;
 uint FTL_IMPLEMENTATION = 0;
 
 uint GC_SCHEME = 0;
+uint MAX_GC_BLOCKS = 1;
 
 /*
  * Limit of LOG pages (for use in BAST)
@@ -244,6 +245,8 @@ void load_entry(char *name, double value, uint line_number) {
 		CACHE_SIZE = value;
 	else if (!strcmp(name, "GC_SCHEME"))
 		GC_SCHEME = value;
+	else if (!strcmp(name, "MAX_GC_BLOCKS"))
+		MAX_GC_BLOCKS = value;
 	else
 		fprintf(stderr, "Config file parsing error on line %u\n", line_number);
 	return;
@@ -317,6 +320,7 @@ void print_config(FILE *stream) {
 	fprintf(stream, "MAP_DIRECTORY_SIZE: %i\n", MAP_DIRECTORY_SIZE);
 	fprintf(stream, "FTL_IMPLEMENTATION: %i\n", FTL_IMPLEMENTATION);
 	fprintf(stream, "GC_SCHEME: %i\n", GC_SCHEME);
+	fprintf(stream, "MAX_GC_BLOCKS: %i\n", MAX_GC_BLOCKS);
 	fprintf(stream, "PARALLELISM_MODE: %i\n", PARALLELISM_MODE);
 	fprintf(stream, "RAID_NUMBER_OF_PHYSICAL_SSDS: %i\n", RAID_NUMBER_OF_PHYSICAL_SSDS);
 

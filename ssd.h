@@ -144,6 +144,7 @@ extern const uint MAP_DIRECTORY_SIZE;
 extern const uint FTL_IMPLEMENTATION;
 
 extern const uint GC_SCHEME;
+extern const uint MAX_GC_BLOCKS;
 
 /*
  * LOG page limit for FAST.
@@ -583,7 +584,6 @@ public:
 	void unlock(double start_time, bool remove = false);
 	static bool timings_sorter(lock_times const& lhs, lock_times const& rhs);
 	std::vector<lock_times> timings;
-	const int PLANE_NOOP;
 private:
 	void update_wear_stats(void);
 	void serialize_access(double start_time, double duration, Event &event, bool remove = false);
@@ -598,6 +598,7 @@ private:
 	double reg_write_delay;
 	Address next_page;
 	uint free_blocks;
+	const int PLANE_NOOP;
 };
 
 /* The die is the data storage hardware unit that contains planes and is a flash
@@ -814,6 +815,7 @@ struct ssd_block
   unsigned int *page_mapping;
   bool *reserved_page;
   unsigned int last_page_written;
+  bool scheduled_for_urgent_erasing;
 };
 
 enum ftl_event_process{BACKGROUND, FOREGROUND};
@@ -836,6 +838,7 @@ struct urgent_ftl_event
 	bool parent_completed;
 	bool predecessor_completed;
 	struct urgent_ftl_event *child;
+	Address write_from_address;
 };
 
 struct background_cleaning_blocks
@@ -886,7 +889,6 @@ private:
 	bool gc_required;
 	unsigned int RAW_SSD_BLOCKS, ADDRESSABLE_SSD_PAGES;
 	unsigned int clean_threshold;
-	bool urgent_cleaning;
 	bool READ_PREFERENCE;
 	//std::vector< std::vector<struct ftl_event> >open_events;
 	std::vector< std::vector<struct ftl_event> >background_events;
@@ -926,7 +928,7 @@ private:
 	void set_urgent_queues(Event &event);
 	double process_urgent_queues(Event &event);
 	void move_urgent_pointers(unsigned int plane_num, unsigned int offset);
-	bool mark_reserved(Address address);
+	bool mark_reserved(Address address, bool is_reserved);
 };
 
 class FtlImpl_Fast : public FtlParent
