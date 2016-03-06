@@ -637,7 +637,6 @@ enum status FtlImpl_Page::read(Event &event, bool &op_complete, double &end_time
 	fg_read.process = FOREGROUND;
 	fg_read.op_complete_pointer = &op_complete;
 	fg_read.end_time_pointer = &end_time;
-	printf("Application read is on plane %d\n", plane_num);
 	if(urgent_queues[plane_num].size() == 0 || READ_PREFERENCE)
 	{
 		fg_read.end_time = read_(event, actual_time);	
@@ -1218,7 +1217,7 @@ enum status FtlImpl_Page::garbage_collect_cached(Event &event)
 			iter->physical_address.plane == target_block_address.plane
 			)
 		{
-			if(std::find(erase_block_list.begin(), erase_block_list.end(), std::distance(iter, filled_block_list.begin())) != erase_block_list.end()	
+			if(std::find(erase_block_list.begin(), erase_block_list.end(), std::distance(filled_block_list.begin(), iter)) != erase_block_list.end()	
 				)  
 			{
 				schedule_writes = true;
@@ -1298,6 +1297,7 @@ enum status FtlImpl_Page::garbage_collect_cached(Event &event)
 	cur_block_to_gc_num = 0;
 	for(;cur_block_to_gc_num < num_blocks_to_gc;cur_block_to_gc_num++)
 	{
+		printf("Adding pointers at %d %d %d\n", urgent_bg_events_location[cur_block_to_gc_num].rw_start_index, urgent_bg_events_location[cur_block_to_gc_num].rw_end_index, urgent_bg_events_location[cur_block_to_gc_num].erase_index);
 		urgent_bg_events[target_plane].push_back(urgent_bg_events_location[cur_block_to_gc_num]);
 	}
 	return SUCCESS;
@@ -1507,7 +1507,26 @@ void FtlImpl_Page::set_urgent_queues(Event &event)
 	std::vector<struct ftl_event>::iterator erase_pointer = background_events[plane_num].begin();
 	std::advance(erase_pointer, urgent_bg_events_location.erase_index);
 
-	std::vector<struct ftl_event> cur_plane_bg_events(rw_start_pointer, rw_end_pointer);
+	//std::vector<struct ftl_event> cur_plane_bg_events(rw_start_pointer, rw_end_pointer);
+	std::vector<struct ftl_event> cur_plane_bg_events;
+
+	printf("%d %d\n", rw_start_pointer != background_events[plane_num].end(), rw_end_pointer != background_events[plane_num].end());
+
+	std::vector<struct ftl_event>::iterator pointer = rw_start_pointer;
+	for(;pointer!=rw_end_pointer;pointer++)
+	{
+		struct ftl_event cur_bg_event;
+		cur_bg_event.type = pointer->type;
+		cur_bg_event.physical_address = pointer->physical_address;
+		cur_bg_event.logical_address = pointer->logical_address;
+		cur_bg_event.start_time = pointer->start_time;
+		cur_bg_event.end_time = pointer->end_time;
+		cur_bg_event.process = pointer->process;
+		cur_bg_event.op_complete_pointer = pointer->op_complete_pointer;
+		cur_bg_event.end_time_pointer = pointer->end_time_pointer;
+		cur_plane_bg_events.push_back(cur_bg_event);
+	}
+
 	cur_plane_bg_events.push_back(*erase_pointer);
 
 	urgent_bg_events[plane_num].erase(urgent_bg_events[plane_num].begin());
@@ -1527,7 +1546,6 @@ void FtlImpl_Page::set_urgent_queues(Event &event)
 	background_events[plane_num].erase(rw_start_pointer, rw_end_pointer);
 	move_urgent_pointers(plane_num, urgent_bg_events_location.rw_start_index, urgent_bg_events_location.rw_end_index);
 
-	printf("Setting up urgent queues for plane num %d\n", plane_num);
 
 	cur_plane_bg_events.front().start_time = first_event_start_time;
 	bool first = true;
@@ -1706,7 +1724,6 @@ double FtlImpl_Page::process_urgent_queues(Event &event)
 						first_pointer->event.start_time = time;
 						break;
 					}
-					printf("Urgent queue of plane %d comes to an end\n", plane_num);
 					controller.issue(e, true);
 					next_event_time = e.get_total_time();
 					iter->lifetime_left -= 1;
@@ -1783,24 +1800,32 @@ void FtlImpl_Page::move_urgent_pointers(unsigned int plane_num, unsigned int sta
 {
 	unsigned int offset = end - start;
 	std::vector<struct urgent_bg_events_pointer>::iterator urgent_pointer;
+	//printf("Moving pointers for plane %d\n", plane_num);
 	for(urgent_pointer=urgent_bg_events[plane_num].begin();urgent_pointer!=urgent_bg_events[plane_num].end();urgent_pointer++)
 	{
 		if(urgent_pointer->rw_start_index > start)
 		{
+			//printf("Moving start from %d ", urgent_pointer->rw_start_index);
 			assert(urgent_pointer->rw_end_index >= end);
 			urgent_pointer->rw_start_index -= offset;
+			//printf("to %d\n", urgent_pointer->rw_start_index);
 		}
 		if(urgent_pointer->rw_end_index > start)
 		{
+			//printf("Moving end from %d ", urgent_pointer->rw_end_index);
 			assert(urgent_pointer->rw_end_index >= end);
 			urgent_pointer->rw_end_index -= offset;
+			//printf("to %d\n", urgent_pointer->rw_end_index);
 		}
 		if(urgent_pointer->erase_index > start)
 		{
+			//printf("Moving erase from %d to ", urgent_pointer->erase_index);
 			assert(urgent_pointer->erase_index >= end);
 			urgent_pointer->erase_index -= offset;
+			//printf("to %d\n", urgent_pointer->erase_index);
 		}
 	}
+	fflush(stdout);
 }
 
 bool FtlImpl_Page::mark_reserved(Address address, bool is_reserved)
