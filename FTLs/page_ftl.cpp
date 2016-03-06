@@ -1215,7 +1215,8 @@ enum status FtlImpl_Page::garbage_collect_cached(Event &event)
 	std::vector<unsigned int> erase_block_list;
 	std::sort(possible_erase_blocks, possible_erase_blocks + possible_erase_blocks_index, compare_possible_erase_blocks);
 	//TODO hardcoded "magic" number 25
-	unsigned int num_blocks_to_gc = possible_erase_blocks_index < 25 ? possible_erase_blocks_index : 25;
+	//unsigned int num_blocks_to_gc = possible_erase_blocks_index < 25 ? possible_erase_blocks_index : 25;
+	unsigned int num_blocks_to_gc = 1;
 	for(unsigned int top_candidate = 0;top_candidate < num_blocks_to_gc;top_candidate++)
 		erase_block_list.push_back(possible_erase_blocks[top_candidate].first);
 

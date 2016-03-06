@@ -58,7 +58,7 @@ int main(int argc, char **argv)
 	printf("\n");
 
 	Ssd *ssd = new Ssd();
-	srand(time(NULL));
+	srand(1010101);
 
 	unsigned int write = atoi(argv[1]);
 	unsigned int util_percent = atoi(argv[2]);
