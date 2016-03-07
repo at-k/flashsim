@@ -50,7 +50,7 @@ int main(int argc, char **argv)
 	bool write_data;
 	//unsigned int req_per_thread = 1000;
 	
-	unsigned int total_read_count = 1000000, cur_read_count = 0;
+	unsigned int total_read_count = 100000000, cur_read_count = 0;
 
 
 	load_config();
@@ -58,11 +58,12 @@ int main(int argc, char **argv)
 	printf("\n");
 
 	Ssd *ssd = new Ssd();
-	srand(1010101);
+	srand(time(NULL));
 
 	unsigned int write = atoi(argv[1]);
 	unsigned int util_percent = atoi(argv[2]);
 	q_depth = atoi(argv[3]);
+	//total_read_count = q_depth * 10000;
 
 	char ftl_implementation[10] = {'0' + FTL_IMPLEMENTATION};
 	char gc_scheme[10] = {'0' + GC_SCHEME};
