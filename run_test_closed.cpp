@@ -50,7 +50,7 @@ int main(int argc, char **argv)
 	bool write_data;
 	//unsigned int req_per_thread = 1000;
 	
-	unsigned int total_read_count = 100000000, cur_read_count = 0;
+	unsigned int total_read_count = 1000000, cur_read_count = 0;
 
 
 	load_config();
@@ -58,7 +58,7 @@ int main(int argc, char **argv)
 	printf("\n");
 
 	Ssd *ssd = new Ssd();
-	srand(time(NULL));
+	srand(10111);
 
 	unsigned int write = atoi(argv[1]);
 	unsigned int util_percent = atoi(argv[2]);
@@ -121,11 +121,12 @@ int main(int argc, char **argv)
 		}
 		//printf("Write %d %f\n", write_complete, write_end_time);
 		prev_noop_time = write_end_time;
+		int k = 0;
 		while(!write_complete)
 		{
 			ssd->event_arrive(NOOP, 1, 1, prev_noop_time, noop_complete, next_noop_time);
-			//printf("Loop %d Set Noop %f %f\n", k, prev_noop_time, next_noop_time);
 			prev_noop_time = next_noop_time;
+			k++;
 		}
 		addresses.insert(i);
 	}
@@ -201,6 +202,7 @@ int main(int argc, char **argv)
 		unsigned int earliest_event_index = 0;
 		for(unsigned int i=0;i<q_depth;i++)
 		{
+			//printf("%d %p %d %f %f\n", i, &op_complete[i], op_complete[i], op_complete_time[i], earliest_event);
 			if(op_complete[i])
 			{
 				event_completed = true;
@@ -213,13 +215,13 @@ int main(int argc, char **argv)
 		}
 		if(event_completed)
 			prev_noop_time = earliest_event < prev_noop_time ? earliest_event : prev_noop_time;
-		//printf("event completed %d\n", event_completed);
 		while(!event_completed)
 		{
 			ssd->event_arrive(NOOP, 1, 1, prev_noop_time, noop_complete, next_noop_time);
 			prev_noop_time = next_noop_time;
 			for(unsigned int i=0;i<q_depth;i++)
 			{
+				printf("%d %d %f %f\n", i, op_complete[i], op_complete_time[i], earliest_event);
 				if(op_complete[i])
 				{
 					event_completed = true;
@@ -236,12 +238,13 @@ int main(int argc, char **argv)
 				prev_noop_time = next_noop_time;
 			loop_c++;
 		}
+		printf("%d\n", earliest_event_index);
 		//for(unsigned int i=0;i<q_depth;i++)
 		//{
 			//printf("op complete %d %d\n", i, op_complete[i]);
 			//if(op_complete[i])
 			//{
-				double result = false;
+				bool result = false;
 				op_complete[earliest_event_index] = false;
 				//printf("Earliest event index %d earliest event time %f\n", earliest_event_index, earliest_event);
 				if(write_data && earliest_event_index >= q_depth/2)
@@ -263,6 +266,7 @@ int main(int argc, char **argv)
 				else
 				{
 					fprintf(read_file, "%.5lf\t%.5lf\t%.5lf\n", op_start_time[earliest_event_index], op_complete_time[earliest_event_index] - op_start_time[earliest_event_index], op_complete_time[earliest_event_index]);
+					printf("[Application] Total latency for %d was %f\n", op_addresses[earliest_event_index], op_complete_time[earliest_event_index] - op_start_time[earliest_event_index]);
 					count[earliest_event_index]++;
 					op_start_time[earliest_event_index] = op_complete_time[earliest_event_index];
 					location = rand()%lastLBA;
@@ -271,6 +275,8 @@ int main(int argc, char **argv)
 						location = rand()%lastLBA;
 					}
 					cur_read_count++;	
+					op_addresses[earliest_event_index] = location;
+					printf("Sending a read for %d on %f\n", op_addresses[earliest_event_index], op_start_time[earliest_event_index]);
 					result = ssd->event_arrive(READ, location, 1, (double) op_start_time[earliest_event_index], op_complete[earliest_event_index], op_complete_time[earliest_event_index]);
 					if(result == false)	
 					{

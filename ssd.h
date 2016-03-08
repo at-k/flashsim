@@ -895,7 +895,7 @@ private:
 	std::vector< std::vector<struct ssd_block> >bg_cleaning_blocks;
 	std::vector< std::vector<struct urgent_bg_events_pointer> >urgent_bg_events;
 
-	unsigned int *plane_free_times;
+	double *plane_free_times;
 	struct logical_page *logical_page_list;
 	std::list<struct ssd_block> free_block_list;
 	std::list<struct ssd_block> allocated_block_list;

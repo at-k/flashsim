@@ -36,6 +36,7 @@ def main():
         except:
             pass
 
+
     for p in percentiles:
         print p, numpy.percentile(latencies, p)
 
