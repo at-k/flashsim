@@ -245,7 +245,7 @@ int main(int argc, char **argv)
 			else
 				prev_noop_time = next_noop_time;
 			loop_c++;
-			printf("app loop %f\n", next_noop_time);
+			printf("%d %f %f\n", loop_c, prev_noop_time, next_noop_time);
 		}
 				
 		if(op_rw_type[earliest_event_index] == OP_READ)
@@ -270,7 +270,11 @@ int main(int argc, char **argv)
 		bool result = false;
 		op_complete[earliest_event_index] = false;
 		op_start_time[earliest_event_index] = op_complete_time[earliest_event_index];
-
+		if(op_start_time[earliest_event_index] == std::numeric_limits<double>::max())
+		{
+			printf("Got a max response at %d which was %d for %d\n", earliest_event_index, op_rw_type[earliest_event_index], op_addresses[earliest_event_index]);
+			break;
+		}
 		bool read_write = rand()%2;
 		if(write_data && read_write == 1)
 		{

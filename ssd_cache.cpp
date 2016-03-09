@@ -26,6 +26,7 @@ bool Cache::present_in_cache(Event &event, bool actual_time)
 
 void Cache::place_in_cache(Event &event, bool actual_time)
 {
+	//printf("Placing %d in cache\n", event.get_logical_address());
 	if(actual_time)
 		process_future(event);
 	else
@@ -44,12 +45,14 @@ void Cache::insert(unsigned int logical_add, double time)
 	}
 	actual_cache[time] = logical_add;
 	reverse_map[logical_add] = time;
+	//printf("inserted %d in cachec\n", logical_add);
 	while(actual_cache.size() > size)
 	{
 		std::map<double, unsigned int>::iterator lru;
 		lru = actual_cache.begin();
 		reverse_map.erase(lru->second);
 		actual_cache.erase(lru);
+		//printf("removed %d from cache\n", lru->second);
 	}
 }
 
@@ -64,6 +67,7 @@ void Cache::invalidate(Event &event, bool actual_time)
 		{
 			actual_cache.erase(iter->second);
 			reverse_map.erase(iter);
+			//printf("invalidated %d from cache\n", logical_add);
 		}
 	}
 }
@@ -83,5 +87,6 @@ void Cache::process_future(Event &event)
 
 void Cache::place_in_future_cache(Event &event)
 {
+	//printf("placing %d in gfuture cachec\n", event.get_logical_address());
 	future_cache[event.get_total_time()] = event.get_logical_address();
 }

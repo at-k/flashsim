@@ -546,6 +546,7 @@ void Plane::serialize_access(double start_time, double duration, Event &event, b
 		}
 	}
 
+
 	/*
 	if(event.get_event_type() == READ && remove)
 	{
@@ -577,6 +578,7 @@ void Plane::serialize_access(double start_time, double duration, Event &event, b
 		printf("====\n");
 	}
 	*/
+	
 	/* write scheduling info in free table slot */
 	lock_times lt;
 	lt.type = event.get_event_type();

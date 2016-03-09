@@ -889,7 +889,6 @@ private:
 	bool gc_required;
 	unsigned int RAW_SSD_BLOCKS, ADDRESSABLE_SSD_PAGES;
 	unsigned int clean_threshold;
-	unsigned int low_watermark;
 	bool READ_PREFERENCE;
 	std::vector< std::vector<struct ftl_event> >background_events;
 	std::vector< std::vector<struct urgent_ftl_event *> >urgent_queues;
@@ -903,6 +902,7 @@ private:
 	std::list<struct ssd_block> filled_block_list;
 	unsigned int *queue_lengths;
 	Address log_write_address;
+	unsigned int low_watermark;
 
 	double get_average_age(struct ssd_block block);
 	Address translate_lba_pba(unsigned int lba);
