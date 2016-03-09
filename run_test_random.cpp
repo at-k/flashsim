@@ -178,7 +178,7 @@ int main(int argc, char **argv)
 				goto exit;
 			}
 			op_addresses[i] = location;
-			op_rw_type[i] = OP_READ;
+			op_rw_type[i] = OP_WRITE;
 		}	
 		else
 		{
@@ -196,7 +196,7 @@ int main(int argc, char **argv)
 				goto exit;
 			}
 			op_addresses[i] = location;
-			op_rw_type[i] = OP_WRITE;
+			op_rw_type[i] = OP_READ;
 		}
 	}
 	
@@ -245,6 +245,7 @@ int main(int argc, char **argv)
 			else
 				prev_noop_time = next_noop_time;
 			loop_c++;
+			printf("app loop %f\n", next_noop_time);
 		}
 				
 		if(op_rw_type[earliest_event_index] == OP_READ)
