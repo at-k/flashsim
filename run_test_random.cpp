@@ -59,7 +59,7 @@ int main(int argc, char **argv)
 	printf("\n");
 
 	Ssd *ssd = new Ssd();
-	srand(10111);
+	srand(time(NULL));
 
 	unsigned int write = atoi(argv[1]);
 	unsigned int util_percent = atoi(argv[2]);
@@ -245,7 +245,7 @@ int main(int argc, char **argv)
 			else
 				prev_noop_time = next_noop_time;
 			loop_c++;
-			printf("%d %f %f\n", loop_c, prev_noop_time, next_noop_time);
+			//printf("%d %f %f\n", loop_c, prev_noop_time, next_noop_time);
 		}
 				
 		if(op_rw_type[earliest_event_index] == OP_READ)
@@ -254,8 +254,8 @@ int main(int argc, char **argv)
 					op_complete_time[earliest_event_index] - op_start_time[earliest_event_index], 
 					op_complete_time[earliest_event_index]);
 			cur_read_count++;
-			printf("[Application] latency for %d was %f\n", op_addresses[earliest_event_index], 
-					op_complete_time[earliest_event_index] - op_start_time[earliest_event_index]);
+			//printf("[Application] latency for %d was %f\n", op_addresses[earliest_event_index], 
+			//		op_complete_time[earliest_event_index] - op_start_time[earliest_event_index]);
 		}
 		else
 		{
@@ -272,7 +272,8 @@ int main(int argc, char **argv)
 		op_start_time[earliest_event_index] = op_complete_time[earliest_event_index];
 		if(op_start_time[earliest_event_index] == std::numeric_limits<double>::max())
 		{
-			printf("Got a max response at %d which was %d for %d\n", earliest_event_index, op_rw_type[earliest_event_index], op_addresses[earliest_event_index]);
+			//printf("Got a max response at %d which was %d for %d\n", earliest_event_index, op_rw_type[earliest_event_index], op_addresses[earliest_event_index]);
+			assert(false);
 			break;
 		}
 		bool read_write = rand()%2;
@@ -280,8 +281,8 @@ int main(int argc, char **argv)
 		{
 			location = rand()%lastLBA;
 			op_addresses[earliest_event_index] = location;
-			printf("[Application] sending a write for %d at time %f\n", op_addresses[earliest_event_index], 
-					op_start_time[earliest_event_index]);
+			//printf("[Application] sending a write for %d at time %f\n", op_addresses[earliest_event_index], 
+			//		op_start_time[earliest_event_index]);
 			result = ssd->event_arrive(WRITE, location, 1, (double) op_start_time[earliest_event_index], 
 					op_complete[earliest_event_index], op_complete_time[earliest_event_index]);
 			op_rw_type[earliest_event_index] = OP_WRITE;
@@ -294,8 +295,8 @@ int main(int argc, char **argv)
 				location = rand()%lastLBA;
 			}
 			op_addresses[earliest_event_index] = location;
-			printf("[Application] sending a read for %d at time %f\n", op_addresses[earliest_event_index], 
-					op_start_time[earliest_event_index]);
+			//printf("[Application] sending a read for %d at time %f\n", op_addresses[earliest_event_index], 
+			//		op_start_time[earliest_event_index]);
 			result = ssd->event_arrive(READ, location, 1, (double) op_start_time[earliest_event_index], 
 					op_complete[earliest_event_index], op_complete_time[earliest_event_index]);
 			op_rw_type[earliest_event_index] = OP_READ;
