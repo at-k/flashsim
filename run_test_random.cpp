@@ -250,18 +250,18 @@ int main(int argc, char **argv)
 				
 		if(op_rw_type[earliest_event_index] == OP_READ)
 		{
-			fprintf(read_file, "%.5lf\t%.5lf\t%.5lf\n", op_start_time[earliest_event_index], 
+			fprintf(read_file, "%.5lf\t%.5lf\t%.5lf\t%d\n", op_start_time[earliest_event_index], 
 					op_complete_time[earliest_event_index] - op_start_time[earliest_event_index], 
-					op_complete_time[earliest_event_index]);
+					op_complete_time[earliest_event_index], op_addresses[earliest_event_index]);
 			cur_read_count++;
 			//printf("[Application] latency for %d was %f\n", op_addresses[earliest_event_index], 
 			//		op_complete_time[earliest_event_index] - op_start_time[earliest_event_index]);
 		}
 		else
 		{
-			fprintf(write_file, "%.5lf\t%.5lf\t%.5lf\n", op_start_time[earliest_event_index], 
+			fprintf(write_file, "%.5lf\t%.5lf\t%.5lf\t%d\n", op_start_time[earliest_event_index], 
 					op_complete_time[earliest_event_index] - op_start_time[earliest_event_index], 
-					op_complete_time[earliest_event_index]);
+					op_complete_time[earliest_event_index], op_addresses[earliest_event_index]);
 			write_count++;
 			addresses.insert(op_addresses[earliest_event_index]);
 		}

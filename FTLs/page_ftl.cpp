@@ -668,6 +668,7 @@ enum status FtlImpl_Page::read(Event &event, bool &op_complete, double &end_time
 	fg_read.process = FOREGROUND;
 	fg_read.op_complete_pointer = &op_complete;
 	fg_read.end_time_pointer = &end_time;
+	fg_read.start_time = event.get_start_time();
 	if(READ_PREFERENCE)
 	{
 		fg_read.start_time = event.get_start_time();
@@ -698,7 +699,8 @@ enum status FtlImpl_Page::read(Event &event, bool &op_complete, double &end_time
 	}
 	else
 	{
-		fg_read.start_time = plane_free_times[plane_num];
+		if(fg_read.start_time < plane_free_times[plane_num])
+			fg_read.start_time = plane_free_times[plane_num];
 		fg_read.end_time = plane_free_times[plane_num] + PAGE_READ_DELAY;
 		plane_free_times[plane_num] += PAGE_READ_DELAY;
 		struct urgent_ftl_event *stalled_fg_read = (struct urgent_ftl_event *)malloc(sizeof(struct urgent_ftl_event));
@@ -756,6 +758,7 @@ enum status FtlImpl_Page::write(Event &event, bool &op_complete, double &end_tim
 	fg_write.end_time_pointer = &end_time;
 	Address write_address = event.get_address();
 	fg_write.physical_address = write_address;
+	fg_write.start_time = event.get_start_time();
 	unsigned int plane_num = write_address.package*PACKAGE_SIZE*DIE_SIZE + write_address.die*DIE_SIZE + write_address.plane;
 	//if(urgent_queues[plane_num].size() == 0)
 	//{
@@ -766,7 +769,8 @@ enum status FtlImpl_Page::write(Event &event, bool &op_complete, double &end_tim
 	//}
 	//else
 	//{
-		fg_write.start_time = plane_free_times[plane_num];
+		if(fg_write.start_time < plane_free_times[plane_num])
+			fg_write.start_time = plane_free_times[plane_num];
 		fg_write.end_time = plane_free_times[plane_num] + PAGE_WRITE_DELAY;
 		plane_free_times[plane_num] += PAGE_WRITE_DELAY;
 		fg_write.end_time = fg_write.start_time;
@@ -1954,7 +1958,6 @@ double FtlImpl_Page::process_urgent_queues(Event &event)
 				if(requires_processing)
 				{
 					//printf("requires processing");
-					//printf("processign along at time %f\n", first_event.start_time);
 					Event e(first_event.type, first_event.logical_address, 1, first_event.start_time);		
 					e.set_address(first_event.physical_address);
 					if(first_event.type == ERASE)
@@ -2025,6 +2028,7 @@ double FtlImpl_Page::process_urgent_queues(Event &event)
 					if(first_pointer->event.start_time < next_event_time)
 						first_pointer->event.start_time = next_event_time;
 					//printf("set the pred complete for %p to true on plane %d\n", first_pointer, plane_num);
+					
 					first_pointer->predecessor_completed = true;
 				}
 				else
