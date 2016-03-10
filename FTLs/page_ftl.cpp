@@ -648,6 +648,11 @@ enum status FtlImpl_Page::read(Event &event, bool &op_complete, double &end_time
 {
 	double time = event.get_start_time();
 	unsigned int logical_page_num = event.get_logical_address();
+	if(actual_time)
+	{
+		b_time = process_background_tasks(event);
+		u_time = process_urgent_queues(event);
+	}
 	if(logical_page_num >= ADDRESSABLE_SSD_PAGES)
 	{
 		printf("returning false because the page is out of range\n");
@@ -742,6 +747,11 @@ enum status FtlImpl_Page::write(Event &event, bool &op_complete, double &end_tim
 {
 	double time = event.get_start_time();
 	double e_time = std::numeric_limits<double>::max();
+	if(actual_time)
+	{
+		b_time = process_background_tasks(event);
+		u_time = process_urgent_queues(event);
+	}
 	Address cur_address;
 	cur_address.valid = NONE;
 	if(!increment_log_write_address(event, cur_address, false, !actual_time))
