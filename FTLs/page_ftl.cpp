@@ -257,7 +257,6 @@ Address FtlImpl_Page::find_write_location(Event &event, Address cur, bool *alrea
 	//{
 	//	queue_len_computed[i] = false;
 	//}
-	printf("FWL num allocated blocks %d\n", allocated_block_list.size());
 	for(iter=allocated_block_list.begin();iter!=allocated_block_list.end();)
 	{
 		/*
@@ -371,7 +370,6 @@ Address FtlImpl_Page::find_write_location(Event &event, Address cur, bool *alrea
 	if(!(found_block && min_wait_time <= event.get_start_time()))
 	{
 		std::list<struct ssd_block>::iterator free_iter, min_iter = free_block_list.end();
-		printf("FWL num free blocks %d\n", free_block_list.size());
 		for(free_iter=free_block_list.begin();free_iter!=free_block_list.end();free_iter++)
 		{
 			Address candidate_address = (*free_iter).physical_address;
@@ -649,7 +647,7 @@ FtlImpl_Page::~FtlImpl_Page(void)
 
 enum status FtlImpl_Page::read(Event &event, bool &op_complete, double &end_time, bool actual_time)
 {
-	printf("Read for %d arrived at %f\n", event.get_logical_address(), event.get_start_time());
+	//printf("Read for %d arrived at %f\n", event.get_logical_address(), event.get_start_time());
 	double time = event.get_start_time();
 	unsigned int logical_page_num = event.get_logical_address();
 	if(actual_time)
@@ -692,7 +690,6 @@ enum status FtlImpl_Page::read(Event &event, bool &op_complete, double &end_time
 			find_location++;
 		stalled_fg_read->predecessor_completed = find_location == urgent_queues[plane_num].begin() ? true : false;
 		urgent_queues[plane_num].insert(find_location, stalled_fg_read);
-		printf("queuef for plane %d\n", plane_num);
 		//find_location++;
 		/*
 		if(find_location != urgent_queues[plane_num].end())
@@ -750,7 +747,7 @@ enum status FtlImpl_Page::noop(Event &event, bool &op_complete, double &end_time
 
 enum status FtlImpl_Page::write(Event &event, bool &op_complete, double &end_time, bool actual_time)
 {
-	printf("Write for %d arrived at %f\n", event.get_logical_address(), event.get_start_time());
+	//printf("Write for %d arrived at %f\n", event.get_logical_address(), event.get_start_time());
 	double time = event.get_start_time();
 	double e_time = std::numeric_limits<double>::max();
 	if(actual_time)
@@ -799,7 +796,6 @@ enum status FtlImpl_Page::write(Event &event, bool &op_complete, double &end_tim
 		stalled_fg_write->predecessor_completed = urgent_queues[plane_num].size() == 0 ? true : false;
 		stalled_fg_write->write_from_address = logical_page_list[fg_write.logical_address].physical_address; 
 		urgent_queues[plane_num].push_back(stalled_fg_write);	
-		printf("Queued for plane %d\n", plane_num);
 		if(gc_required)
 		{
 			garbage_collect(event);
@@ -979,7 +975,6 @@ enum status FtlImpl_Page::garbage_collect(Event &event)
 {
 	enum status ret_status;
 	unsigned int total_bg_cleaning_blocks = 0;
-	printf("GC called\n");
 
 	for(unsigned int i=0;i<SSD_SIZE*PACKAGE_SIZE*DIE_SIZE;i++)
 	{
@@ -1132,7 +1127,6 @@ enum status FtlImpl_Page::garbage_collect_default(Event &event)
 			bg_read.physical_address = cur_page_address;
 			bg_read.logical_address = block_to_clean.page_mapping[i];
 			bg_read.start_time = time;
-			printf("Set read start time to %f\n", bg_read.start_time);
 			bg_read.end_time = bg_read.start_time;
 			bg_read.process = BACKGROUND;
 			bg_read.op_complete_pointer = NULL;
@@ -1143,7 +1137,6 @@ enum status FtlImpl_Page::garbage_collect_default(Event &event)
 			bg_write.physical_address = cur_page_address;
 			bg_write.logical_address = block_to_clean.page_mapping[i];
 			bg_write.start_time = time;
-			printf("Set write start time to %f\n", bg_write.start_time);
 			bg_write.end_time = bg_write.start_time;
 			bg_write.process = BACKGROUND;
 			bg_write.op_complete_pointer = NULL;
@@ -1164,7 +1157,6 @@ enum status FtlImpl_Page::garbage_collect_default(Event &event)
 	bg_erase.op_complete_pointer = NULL;
 	bg_erase.end_time_pointer = NULL;
 
-	printf("GC chose a block on plane %d\n", plane_num);
 	background_events[plane_num].push_back(bg_erase);
 	filled_block_list.erase(max_benefit_block_reference);
 	bg_cleaning_blocks[plane_num].push_back(block_to_clean);
@@ -1447,10 +1439,6 @@ double FtlImpl_Page::process_background_tasks(Event &event)
 	}
 	for(unsigned int plane_num=0;plane_num<SSD_SIZE*PACKAGE_SIZE*DIE_SIZE;plane_num++)
 	{
-		printf("%d %d ", plane_num, background_events[plane_num].size());
-		if(background_events[plane_num].size() > 0)
-			printf("%f %f", background_events[plane_num].front().start_time, cur_simulated_time);
-		printf("\n");
 		if(background_events[plane_num].size() == 0)
 			continue;
 		bool first = true;
@@ -1510,7 +1498,6 @@ double FtlImpl_Page::process_background_tasks(Event &event)
 			//	break;
 			//}
 			//if(plane_free_times[candidate_plane] > first_event.start_time)
-			printf("processing %d urgent queue for plane %d is %d\n", plane_num, candidate_plane, urgent_queues[candidate_plane].size());
 			if(urgent_queues[candidate_plane].size() != 0)
 			{
 				background_events[plane_num].front().start_time = plane_free_times[candidate_plane];
@@ -1534,7 +1521,6 @@ double FtlImpl_Page::process_background_tasks(Event &event)
 			if(perform_first_task && !(urgent_cleaning && first_event.type == WRITE ))
 			{
 				//printf("Inside the if\n");
-				printf("performing a bt type %d time %f\n\n", first_event.type, first_event.start_time);
 				bool is_erase = false;
 				double task_time = 0;
 				if(first_event.type == READ)
@@ -1845,7 +1831,6 @@ void FtlImpl_Page::set_urgent_queues(Event &event)
 			urgent_bg_read->child = NULL;
 			urgent_queues[plane_num].push_back(urgent_bg_read);
 			last_plane_num = plane_num;
-			printf("Setting read urgent for %d on plane %d\n", first_event.logical_address, plane_num);
 		}
 		else if(first_event.type == WRITE)
 		{
@@ -1884,7 +1869,6 @@ void FtlImpl_Page::set_urgent_queues(Event &event)
 			urgent_queues[log_write_plane].push_back(urgent_bg_write);
 			last_plane_num = log_write_plane;
 			write_locations.push_back(std::pair<unsigned int, unsigned int>(log_write_plane, urgent_queues[log_write_plane].size() -1));
-			printf("Setting wrute urgent for %d on plane %d\n", first_event.logical_address, log_write_plane);
 		}
 		else if(first_event.type == ERASE)
 		{
@@ -1967,7 +1951,7 @@ void FtlImpl_Page::set_urgent_queues(Event &event)
 double FtlImpl_Page::process_urgent_queues(Event &event)
 {
 	double time = event.get_start_time();
-	printf("Processing urgent queues for start time %f due to op on %d\n", time, event.get_logical_address());
+	//printf("Processing urgent queues for start time %f due to op on %d\n", time, event.get_logical_address());
 	double ret_time = std::numeric_limits<double>::max();
 	bool processed_event = false;
 	do
@@ -2033,7 +2017,6 @@ double FtlImpl_Page::process_urgent_queues(Event &event)
 							first_pointer->event.start_time =time;
 
 			}
-			printf("HEAD %d %d %d %d %f %d\n", plane_num, first_pointer->event.logical_address, first_pointer->event.type, process_worthy, first_pointer->event.start_time, first_pointer->predecessor_completed);
 			while(	first_pointer && 
 					process_worthy && 
 					first_pointer->event.start_time <= time &&
@@ -2066,12 +2049,12 @@ double FtlImpl_Page::process_urgent_queues(Event &event)
 				if(requires_processing)
 				{
 					//printf("requires processing");
-					printf("processing %d on plane %d for address %d at time %f\n", first_event.type, plane_num, first_event.logical_address, first_event.start_time);
 					Event e(first_event.type, first_event.logical_address, 1, first_event.start_time);		
 					e.set_address(first_event.physical_address);
 					if(first_event.type == ERASE)
 					{
 						assert(erase_block_pointer != allocated_block_list.end() && erase_block_pointer != free_block_list.end());
+						//printf("Erasing on plane %d at time %f\n", plane_num, first_event.start_time);
 						controller.issue(e, true);
 						next_event_time = e.get_total_time();
 						erase_block_pointer->lifetime_left -= 1;
@@ -2116,7 +2099,6 @@ double FtlImpl_Page::process_urgent_queues(Event &event)
 					//else
 					//	printf("%f\n", first_event.end_time);
 					*(first_event.end_time_pointer) = first_event.end_time;
-					printf("Set op complete for %d of type %d to %f\n", first_event.logical_address, first_event.type, *(first_event.end_time_pointer));
 				}
 				if(first_pointer->child)
 				{
@@ -2137,7 +2119,6 @@ double FtlImpl_Page::process_urgent_queues(Event &event)
 					first_pointer = *(urgent_queues[plane_num].begin());
 					if(first_pointer->event.start_time < next_event_time)
 						first_pointer->event.start_time = next_event_time;
-					printf("set the head event on %d to start at time %f\n", plane_num, first_pointer->event.start_time);
 					double delay = 0;
 					if(first_pointer->event.type == READ)
 						delay = PAGE_READ_DELAY;
@@ -2205,8 +2186,6 @@ double FtlImpl_Page::process_urgent_queues(Event &event)
 				}
 			}
 			//printf("The while broke\n");
-			if(first_pointer)
-				printf("%d %d %d %f %f %d %d\n", plane_num, first_pointer->event.type, first_pointer->event.logical_address, first_pointer->event.start_time, time, process_worthy, first_pointer->predecessor_completed);
 			if(	first_pointer && first_pointer->event.start_time < ret_time && 
 				process_worthy && first_pointer->predecessor_completed)
 			{

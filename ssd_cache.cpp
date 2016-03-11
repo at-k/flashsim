@@ -28,7 +28,7 @@ void Cache::place_in_cache(Event &event, bool actual_time)
 {
 	Address iter_address = event.get_address();
 	unsigned int iter_plane = iter_address.package*PACKAGE_SIZE*DIE_SIZE + iter_address.die*DIE_SIZE + iter_address.plane;
-	//printf("Placing %d in cache for plane %d\n", event.get_logical_address(), iter_plane);
+//	printf("Placing %d in cache for plane %d\n", event.get_logical_address(), iter_plane);
 	if(actual_time)
 		process_future(event);
 	else
@@ -47,14 +47,14 @@ void Cache::insert(unsigned int logical_add, double time)
 	}
 	actual_cache[time] = logical_add;
 	reverse_map[logical_add] = time;
-	//printf("inserted %d in cachec\n", logical_add);
+//	printf("inserted %d in cachec\n", logical_add);
 	while(actual_cache.size() > size)
 	{
 		std::map<double, unsigned int>::iterator lru;
 		lru = actual_cache.begin();
 		reverse_map.erase(lru->second);
 		actual_cache.erase(lru);
-		//printf("removed %d from cache\n", lru->second);
+//		printf("removed %d from cache\n", lru->second);
 	}
 }
 
@@ -63,10 +63,13 @@ void Cache::invalidate(Event &event, bool actual_time)
 	unsigned int logical_add = event.get_logical_address();
 	if(actual_time)
 	{
-		if(present_in_cache(event, actual_time))
-		{
+		//if(present_in_cache(event, actual_time))
+		//{
+	Address iter_address = event.get_address();
+	unsigned int iter_plane = iter_address.package*PACKAGE_SIZE*DIE_SIZE + iter_address.die*DIE_SIZE + iter_address.plane;
+//	printf("Write placing %d in cache for plane %d\n", event.get_logical_address(), iter_plane);
 			insert(logical_add, event.get_total_time());
-		}
+		//}
 	}
 
 /*
@@ -96,6 +99,6 @@ void Cache::process_future(Event &event)
 
 void Cache::place_in_future_cache(Event &event)
 {
-	//printf("placing %d in gfuture cachec\n", event.get_logical_address());
+//	printf("placing %d in gfuture cachec\n", event.get_logical_address());
 	future_cache[event.get_total_time()] = event.get_logical_address();
 }
