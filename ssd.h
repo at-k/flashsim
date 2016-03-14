@@ -904,6 +904,9 @@ private:
 	Address log_write_address;
 	unsigned int low_watermark;
 
+	double bg_events_time;
+	double urgent_events_time;
+
 	double get_average_age(struct ssd_block block);
 	Address translate_lba_pba(unsigned int lba);
 	unsigned int translate_pba_lba(Address pba);
@@ -918,11 +921,7 @@ private:
 	enum status garbage_collect(Event &event);
 	enum status garbage_collect_default(Event &event);
 	enum status garbage_collect_cached(Event &event);
-	void add_background_event(struct ftl_event event);
 	double process_background_tasks(Event &event);
-	//double process_open_events_table(unsigned int plane_num, double time);
-	//double process_open_events_table(double time);
-	void populate_queue_len(double time, unsigned int plane_num);
 	double read_(Event &event, bool actual_time = true);
 	double write_(Event &event, bool actual_time = true);
 	void set_urgent_queues(Event &event);
