@@ -815,7 +815,7 @@ struct ssd_block
   unsigned int *page_mapping;
   bool *reserved_page;
   unsigned int last_page_written;
-  bool scheduled_for_urgent_erasing;
+  bool scheduled_for_erasing;
 };
 
 enum ftl_event_process{BACKGROUND, FOREGROUND};
@@ -832,12 +832,12 @@ struct ftl_event
 	double *end_time_pointer;
 };
 
-struct urgent_ftl_event
+struct queued_ftl_event
 {
 	struct ftl_event event;
 	bool parent_completed;
 	bool predecessor_completed;
-	struct urgent_ftl_event *child;
+	struct queued_ftl_event *child;
 	Address write_from_address;
 };
 
@@ -847,7 +847,7 @@ struct background_cleaning_blocks
 	struct ssd_block cleaning_block;
 };
 
-struct urgent_bg_events_pointer
+struct required_bg_events_pointer
 {
 	unsigned int rw_start_index;
 	unsigned int rw_end_index;
@@ -891,9 +891,9 @@ private:
 	unsigned int clean_threshold;
 	bool READ_PREFERENCE;
 	std::vector< std::vector<struct ftl_event> >background_events;
-	std::vector< std::vector<struct urgent_ftl_event *> >urgent_queues;
+	std::vector< std::vector<struct queued_ftl_event *> >ftl_queues;
 	std::vector< std::vector<struct ssd_block> >bg_cleaning_blocks;
-	std::vector< std::vector<struct urgent_bg_events_pointer> >urgent_bg_events;
+	std::vector< std::vector<struct required_bg_events_pointer> >required_bg_events;
 
 	double *plane_free_times;
 	struct logical_page *logical_page_list;
@@ -905,7 +905,7 @@ private:
 	unsigned int low_watermark;
 
 	double bg_events_time;
-	double urgent_events_time;
+	double next_event_time;
 
 	double get_average_age(struct ssd_block block);
 	Address translate_lba_pba(unsigned int lba);
@@ -924,9 +924,9 @@ private:
 	double process_background_tasks(Event &event);
 	double read_(Event &event, bool actual_time = true);
 	double write_(Event &event, bool actual_time = true);
-	void set_urgent_queues(Event &event);
-	double process_urgent_queues(Event &event);
-	void move_urgent_pointers(unsigned int plane_num, unsigned int start, unsigned int end);
+	void queue_required_bg_events(Event &event);
+	double process_ftl_queues(Event &event);
+	void move_required_pointers(unsigned int plane_num, unsigned int start, unsigned int end);
 	bool mark_reserved(Address address, bool is_reserved);
 };
 
