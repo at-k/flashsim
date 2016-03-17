@@ -100,13 +100,13 @@ enum status Controller::issue(Event &event_list)
 					|| ssd.ram.read(*cur) == FAILURE
 					|| ssd.replace(*cur) == FAILURE)
 					return FAILURE;
-				ssd.cache.place_in_cache(*cur);
 			}
 			else
 			{
 				if(ssd.ram.read(*cur) == FAILURE)
 					return FAILURE;
 			}
+			ssd.cache.place_in_cache(*cur);
 		}
 		else if(cur -> get_event_type() == WRITE)
 		{
@@ -118,7 +118,7 @@ enum status Controller::issue(Event &event_list)
 				|| ssd.write(*cur) == FAILURE
 				|| ssd.replace(*cur) == FAILURE)
 				return FAILURE;
-			ssd.cache.invalidate(*cur);
+			ssd.cache.place_in_cache(*cur);
 		}
 		else if(cur -> get_event_type() == ERASE)
 		{
