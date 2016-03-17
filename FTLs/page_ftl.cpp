@@ -29,7 +29,7 @@
 
 using namespace ssd;
 
-FtlImpl_Page::FtlImpl_Page(Controller &controller):FtlParent(controller), 
+FtlImpl_Page::FtlImpl_Page(Controller &controller, Ssd &parent):FtlParent(controller, parent), 
 	latest_write_time(0), 
 	gc_required(false),
 	RAW_SSD_BLOCKS(SSD_SIZE*PACKAGE_SIZE*DIE_SIZE*PLANE_SIZE),
@@ -335,7 +335,7 @@ Address FtlImpl_Page::find_write_location(Event &event, Address cur, bool *alrea
 	return ret_address;
 }
 
-bool FtlImpl_Page::increment_log_write_address(Event &event, Address asked_for, bool already_allocated, bool bg_write)
+bool FtlImpl_Page::increment_log_write_address(Event &event, Address asked_for, bool already_allocated)
 {
 	Address null_address;
 	null_address.valid = NONE;
@@ -501,14 +501,11 @@ FtlImpl_Page::~FtlImpl_Page(void)
 	free(queue_lengths);
 }
 
-enum status FtlImpl_Page::read(Event &event, bool &op_complete, double &end_time, bool actual_time)
+enum status FtlImpl_Page::read(Event &event, bool &op_complete, double &end_time)
 {
 	unsigned int logical_page_num = event.get_logical_address();
-	if(actual_time)
-	{
-		next_event_time = process_ftl_queues(event);
-		bg_events_time = process_background_tasks(event);
-	}
+	next_event_time = process_ftl_queues(event);
+	bg_events_time = process_background_tasks(event);
 	if(logical_page_num >= ADDRESSABLE_SSD_PAGES)
 	{
 		printf("returning false because the page is out of range\n");
@@ -519,6 +516,14 @@ enum status FtlImpl_Page::read(Event &event, bool &op_complete, double &end_time
 		printf("returning false because page has not been written yet\n");
 		return FAILURE;
 	}
+
+	if(ssd.cache.present_in_cache(event))
+	{
+		end_time = read_(event);
+		op_complete = true;
+		return SUCCESS;
+	}
+
 	Address read_address = logical_page_list[logical_page_num].physical_address;
 	event.set_address(read_address);
 	unsigned int plane_num = read_address.package*PACKAGE_SIZE*DIE_SIZE + read_address.die*DIE_SIZE + read_address.plane;
@@ -558,41 +563,31 @@ enum status FtlImpl_Page::read(Event &event, bool &op_complete, double &end_time
 		stalled_fg_read->predecessor_completed = ftl_queues[plane_num].size() == 0 ? true : false;
 		ftl_queues[plane_num].push_back(stalled_fg_read);
 	}
-	if(actual_time)
-	{
-		next_event_time = process_ftl_queues(event);
-		bg_events_time = process_background_tasks(event);
-	}
+	next_event_time = process_ftl_queues(event);
+	bg_events_time = process_background_tasks(event);
 	return SUCCESS;
 }
 
 
-enum status FtlImpl_Page::noop(Event &event, bool &op_complete, double &end_time, bool actual_time)
+enum status FtlImpl_Page::noop(Event &event, bool &op_complete, double &end_time)
 {
 	double e_time = std::numeric_limits<double>::max();
-	if(actual_time)
-	{
-		next_event_time = process_ftl_queues(event);
-		bg_events_time = process_background_tasks(event);
-		e_time = next_event_time < e_time ? next_event_time : e_time;
-	}
+	next_event_time = process_ftl_queues(event);
+	bg_events_time = process_background_tasks(event);
+	e_time = next_event_time < e_time ? next_event_time : e_time;
 	event.incr_time_taken(e_time - event.get_start_time());
 	end_time = e_time;
 	op_complete = true;
 	return SUCCESS;
 }
 
-enum status FtlImpl_Page::write(Event &event, bool &op_complete, double &end_time, bool actual_time)
+enum status FtlImpl_Page::write(Event &event, bool &op_complete, double &end_time)
 {
-	double time = event.get_start_time();
-	if(actual_time)
-	{
-		next_event_time = process_ftl_queues(event);
-		bg_events_time = process_background_tasks(event);
-	}
+	next_event_time = process_ftl_queues(event);
+	bg_events_time = process_background_tasks(event);
 	Address cur_address;
 	cur_address.valid = NONE;
-	if(!increment_log_write_address(event, cur_address, false, !actual_time))
+	if(!increment_log_write_address(event, cur_address, false))
 	{
 		printf("returning known FAILURE\n");
 		return FAILURE; 
@@ -629,23 +624,20 @@ enum status FtlImpl_Page::write(Event &event, bool &op_complete, double &end_tim
 			queue_required_bg_events(event);
 		}
 	}
-	if(actual_time)
-	{
-		next_event_time = process_ftl_queues(event);
-		bg_events_time = process_background_tasks(event);
-	}
+	next_event_time = process_ftl_queues(event);
+	bg_events_time = process_background_tasks(event);
 	return SUCCESS;
 }
 
 
-double FtlImpl_Page::read_(Event &event, bool actual_time)
+double FtlImpl_Page::read_(Event &event)
 {
 	controller.stats.numRead++;
-	controller.issue(event, actual_time);
+	controller.issue(event);
 	return event.get_total_time();
 }
 
-double FtlImpl_Page::write_(Event &event, bool actual_time)
+double FtlImpl_Page::write_(Event &event)
 {
 	unsigned int logical_page_num = event.get_logical_address();
 	Address write_address = event.get_address();
@@ -718,7 +710,7 @@ double FtlImpl_Page::write_(Event &event, bool actual_time)
 	assert(currently_mapped_address.valid != PAGE || !need_invalidation);
 	event.set_address(write_address);
 	controller.stats.numWrite++;
-	controller.issue(event, actual_time);
+	controller.issue(event);
 	logical_page_list[logical_page_num].physical_address = write_address;
 	(*log_write_iter).last_write_time = latest_write_time++;    
 	(*log_write_iter).valid_page_count += 1;
@@ -1266,7 +1258,7 @@ double FtlImpl_Page::process_background_tasks(Event &event)
 				else if(first_event.type == WRITE)
 				{
 					Event bg_write(first_event.type, first_event.logical_address, 1, first_event.start_time);
-					increment_log_write_address(bg_write, candidate_address, write_address_already_open, true); 
+					increment_log_write_address(bg_write, candidate_address, write_address_already_open); 
 					first_event.physical_address = log_write_address;
 					if(!mark_reserved(log_write_address, true))
 						assert(false);
@@ -1481,7 +1473,7 @@ void FtlImpl_Page::queue_required_bg_events(Event &event)
 			bool write_address_already_open;
 			Event probable_bg_write(WRITE, first_event.logical_address, 1, first_event.start_time);
 			candidate_address = find_write_location(probable_bg_write, log_write_address, &write_address_already_open);
-			increment_log_write_address(probable_bg_write, candidate_address, write_address_already_open, true);
+			increment_log_write_address(probable_bg_write, candidate_address, write_address_already_open);
 			first_event.physical_address = log_write_address;
 			if(!mark_reserved(log_write_address, true))
 				assert(false);
@@ -1641,7 +1633,7 @@ double FtlImpl_Page::process_ftl_queues(Event &event)
 					if(first_event.type == ERASE)
 					{
 						assert(erase_block_pointer != allocated_block_list.end() && erase_block_pointer != free_block_list.end());
-						controller.issue(e, true);
+						controller.issue(e);
 						next_event_time = e.get_total_time();
 						erase_block_pointer->lifetime_left -= 1;
 						erase_block_pointer->scheduled_for_erasing = false;
@@ -1650,12 +1642,12 @@ double FtlImpl_Page::process_ftl_queues(Event &event)
 					}
 					else if(first_event.type == READ)
 					{
-						next_event_time = read_(e, true);
+						next_event_time = read_(e);
 						first_event.end_time = next_event_time;
 					}
 					else if(first_event.type == WRITE)
 					{
-						next_event_time = write_(e, true);
+						next_event_time = write_(e);
 						first_event.end_time = next_event_time;
 					}
 				}

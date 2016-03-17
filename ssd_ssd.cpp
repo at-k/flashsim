@@ -42,12 +42,12 @@ using namespace ssd;
  * occurs in the order of declaration in the class definition and not in the
  * order listed here */
 Ssd::Ssd(uint ssd_size): 
+	cache(),
 	size(ssd_size), 
 	controller(*this), 
 	ram(RAM_READ_DELAY, RAM_WRITE_DELAY), 
 	bus(size, BUS_CTRL_DELAY, BUS_DATA_DELAY, BUS_TABLE_SIZE, BUS_MAX_CONNECT), 
 
-	cache(),
 	/* use a const pointer (Package * const data) to use as an array
 	 * but like a reference, we cannot reseat the pointer */
 	data((Package *) malloc(ssd_size * sizeof(Package))), 
@@ -186,32 +186,32 @@ void *Ssd::get_result_buffer()
  * technically the Package is conceptual, but we keep track of statistics
  * 	and addresses with Packages, so send Events through Package but do not 
  * 	have Package do anything but update its statistics and pass on to Die */
-enum status Ssd::read(Event &event, bool remove)
+enum status Ssd::read(Event &event)
 {
 	assert(data != NULL && event.get_address().package < size && event.get_address().valid >= PACKAGE);
-	return data[event.get_address().package].read(event, remove);
+	return data[event.get_address().package].read(event);
 }
 
-enum status Ssd::write(Event &event, bool remove)
+enum status Ssd::write(Event &event)
 {
 	assert(data != NULL && event.get_address().package < size && event.get_address().valid >= PACKAGE);
-	return data[event.get_address().package].write(event, remove);
+	return data[event.get_address().package].write(event);
 }
 
-enum status Ssd::replace(Event &event, bool remove)
+enum status Ssd::replace(Event &event)
 {
 	assert(data != NULL && event.get_replace_address().package < size);
 	if (event.get_replace_address().valid == PAGE)
-		return data[event.get_replace_address().package].replace(event, remove);
+		return data[event.get_replace_address().package].replace(event);
 	else
 		return SUCCESS;
 }
 
 
-enum status Ssd::erase(Event &event, bool remove)
+enum status Ssd::erase(Event &event)
 {
 	assert(data != NULL && event.get_address().package < size && event.get_address().valid >= PACKAGE);
-	enum status status = data[event.get_address().package].erase(event, remove);
+	enum status status = data[event.get_address().package].erase(event);
 
 	/* update values if no errors */
 	if (status == SUCCESS)
@@ -219,13 +219,13 @@ enum status Ssd::erase(Event &event, bool remove)
 	return status;
 }
 
-enum status Ssd::merge(Event &event, bool remove)
+enum status Ssd::merge(Event &event)
 {
 	assert(data != NULL && event.get_address().package < size && event.get_address().valid >= PACKAGE);
-	return data[event.get_address().package].merge(event, remove);
+	return data[event.get_address().package].merge(event);
 }
 
-enum status Ssd::merge_replacement_block(Event &event, bool remove)
+enum status Ssd::merge_replacement_block(Event &event)
 {
 	//assert(data != NULL && event.get_address().package < size && event.get_address().valid >= PACKAGE && event.get_log_address().valid >= PACKAGE);
 	return SUCCESS;

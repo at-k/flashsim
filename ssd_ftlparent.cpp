@@ -28,7 +28,7 @@ using namespace ssd;
 // Initialization of the block layer.
 Block_manager *Block_manager::inst = NULL;
 
-FtlParent::FtlParent(Controller &controller) : controller(controller)
+FtlParent::FtlParent(Controller &controller, Ssd &parent) : controller(controller), ssd(parent) 
 {
 	Block_manager::instance_initialize(this);
 

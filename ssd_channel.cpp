@@ -121,7 +121,7 @@ enum status Channel::disconnect(void)
  * event is sent across bus as soon as bus channel is available
  * event may fail if bus channel is saturated so check return value
  */
-enum status Channel::lock(double start_time, double duration, Event &event, bool remove)
+enum status Channel::lock(double start_time, double duration, Event &event)
 {
 	assert(num_connected <= max_connections);
 	assert(ctrl_delay >= 0.0);
@@ -134,13 +134,6 @@ enum status Channel::lock(double start_time, double duration, Event &event, bool
 	//printf("type: %d, start_time: %f, duration: %f\n", event.get_event_type(), start_time, duration);
 
 
-	/* free up any table slots and sort existing ones */
-	/*
-	if(remove)
-		unlock(event.get_start_time(), remove);
-	else
-		unlock(start_time, remove);
-	*/
 
 	double sched_time = BUS_CHANNEL_FREE_FLAG;
 
@@ -149,19 +142,16 @@ enum status Channel::lock(double start_time, double duration, Event &event, bool
 	std::vector<lock_times>::iterator it, insert_location = timings.end(), first, last;
 
 
-	if(remove)
+	for(it=timings.begin();it!=timings.end();)
 	{
-		for(it=timings.begin();it!=timings.end();)
+		//printf("iterator address %p %f %f\n", it, (*it).lock_time, (*it).unlock_time);
+		//fflush(stdout);
+		if(timings.size() > 0)
 		{
-			//printf("iterator address %p %f %f\n", it, (*it).lock_time, (*it).unlock_time);
-			//fflush(stdout);
-			if(timings.size() > 0)
-			{
-			if((*it).unlock_time <= start_time)
-				timings.erase(it);
-			else
-				break;
-			}
+		if((*it).unlock_time <= start_time)
+			timings.erase(it);
+		else
+			break;
 		}
 	}
 
@@ -250,22 +240,17 @@ enum status Channel::lock(double start_time, double duration, Event &event, bool
 /* remove all expired entries (finish time is less than provided time)
  * update current number of table entries used
  * sort table by finish times (2nd row) */
-void Channel::unlock(double start_time, bool remove)
+void Channel::unlock(double start_time)
 {
-	printf("UNLOCK CALLED===================\n");
-	return;
 	/* remove expired channel lock entries */
-	if(remove)
+	std::vector<lock_times>::iterator it;
+	for ( it = timings.begin(); it < timings.end();)
 	{
-		std::vector<lock_times>::iterator it;
-		for ( it = timings.begin(); it < timings.end();)
+		if((*it).unlock_time <= start_time)
+			timings.erase(it);
+		else
 		{
-			if((*it).unlock_time <= start_time)
-				timings.erase(it);
-			else
-			{
-				it++;
-			}
+			it++;
 		}
 	}
 	std::sort(timings.begin(), timings.end(), &timings_sorter);

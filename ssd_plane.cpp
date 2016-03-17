@@ -113,24 +113,24 @@ Plane::~Plane(void)
 	return;
 }
 
-enum status Plane::read(Event &event, bool remove)
+enum status Plane::read(Event &event)
 {
 	assert(event.get_address().block < size && event.get_address().valid > PLANE);
 
 	double start_time = event.get_total_time();
 	double duration = PAGE_READ_DELAY;
-	serialize_access(start_time, duration, event, remove);
+	serialize_access(start_time, duration, event);
 
 	return data[event.get_address().block].read(event);
 }
 
-enum status Plane::write(Event &event, bool remove)
+enum status Plane::write(Event &event)
 {
 	assert(event.get_address().block < size && event.get_address().valid > PLANE && next_page.valid >= BLOCK);
 
 	double start_time = event.get_total_time();
 	double duration = PAGE_WRITE_DELAY;
-	serialize_access(start_time, duration, event, remove);
+	serialize_access(start_time, duration, event);
 
 	enum block_state prev = data[event.get_address().block].get_state();
 
@@ -147,7 +147,7 @@ enum status Plane::write(Event &event, bool remove)
 	return s;
 }
 
-enum status Plane::replace(Event &event, bool remove)
+enum status Plane::replace(Event &event)
 {
 	assert(event.get_address().block < size);
 	return data[event.get_replace_address().block].replace(event);
@@ -158,13 +158,13 @@ enum status Plane::replace(Event &event, bool remove)
  * 	updates last_erase_time if later time
  * 	updates erases_remaining if smaller value
  * returns 1 for success, 0 for failure */
-enum status Plane::erase(Event &event, bool remove)
+enum status Plane::erase(Event &event)
 {
 	assert(event.get_address().block < size && event.get_address().valid > PLANE);
 
 	double start_time = event.get_total_time();
 	double duration = BLOCK_ERASE_DELAY;
-	serialize_access(start_time, duration, event, remove);
+	serialize_access(start_time, duration, event);
 
 	enum status status = data[event.get_address().block]._erase(event);
 
@@ -186,7 +186,7 @@ enum status Plane::erase(Event &event, bool remove)
  * 	move event::address valid pages to event::address_merge empty pages
  * creates own events for resulting read/write operations
  * supports blocks that have different sizes */
-enum status Plane::_merge(Event &event, bool remove)
+enum status Plane::_merge(Event &event)
 {
 	assert(event.get_address().block < size && event.get_address().valid > PLANE);
 	assert(reg_read_delay >= 0.0 && reg_write_delay >= 0.0);
@@ -421,20 +421,17 @@ Block *Plane::get_block_pointer(const Address & address)
 	return data[address.block].get_pointer();
 }
 
-void Plane::unlock(double start_time, bool remove)
+void Plane::unlock(double start_time)
 {
 	/* remove expired channel lock entries */
-	if(remove)
-	{	
-		std::vector<lock_times>::iterator it;
-		for ( it = timings.begin(); it < timings.end();)
+	std::vector<lock_times>::iterator it;
+	for ( it = timings.begin(); it < timings.end();)
+	{
+		if((*it).unlock_time <= start_time)
+			timings.erase(it);
+		else
 		{
-			if((*it).unlock_time <= start_time)
-				timings.erase(it);
-			else
-			{
-				it++;
-			}
+			it++;
 		}
 	}
 	std::sort(timings.begin(), timings.end(), &timings_sorter);
@@ -444,7 +441,7 @@ bool Plane::timings_sorter(lock_times const& lhs, lock_times const& rhs) {
     return lhs.lock_time < rhs.lock_time;
 }
 
-void Plane::serialize_access(double start_time, double duration, Event &event, bool remove)
+void Plane::serialize_access(double start_time, double duration, Event &event)
 {
 	assert(start_time >= 0.0);
 	assert(duration >= 0.0);
@@ -453,29 +450,18 @@ void Plane::serialize_access(double start_time, double duration, Event &event, b
 	//printf("Plane Access --- start_time: %f, duration: %f\n", start_time, duration);
 
 
-	/* free up any table slots and sort existing ones */
-	/*
-	if(remove)
-		unlock(event.get_start_time(), remove);
-	else
-		unlock(start_time, remove);
-	*/
 	double sched_time = PLANE_NOOP;
 
 	std::vector<lock_times>::iterator it, insert_location, first, last;
 
 	//printf("The size for plane is %d\n", timings.size());
 
-	if(remove)
+	for(it=timings.begin();it!=timings.end();)
 	{
-		//printf("in the remove\n");
-		for(it=timings.begin();it!=timings.end();)
-		{
-			if((*it).unlock_time <= start_time)
-				timings.erase(it);
-			else
-				break;
-		}
+		if((*it).unlock_time <= start_time)
+			timings.erase(it);
+		else
+			break;
 	}
 	
 	first = timings.begin();
@@ -547,7 +533,7 @@ void Plane::serialize_access(double start_time, double duration, Event &event, b
 	}
 
 	/*
-	if(event.get_event_type() == READ && remove)
+	if(event.get_event_type() == READ)
 	{
 		printf("Waits on plane for reading %d of duration %f\n", event.get_logical_address(), duration);
 		double last_time = start_time;

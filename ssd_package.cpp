@@ -83,37 +83,37 @@ Package::~Package(void)
 	return;
 }
 
-enum status Package::read(Event &event, bool remove)
+enum status Package::read(Event &event)
 {
 	assert(data != NULL && event.get_address().die < size && event.get_address().valid > PACKAGE);
-	return data[event.get_address().die].read(event, remove);
+	return data[event.get_address().die].read(event);
 }
 
-enum status Package::write(Event &event, bool remove)
+enum status Package::write(Event &event)
 {
 	assert(data != NULL && event.get_address().die < size && event.get_address().valid > PACKAGE);
-	return data[event.get_address().die].write(event, remove);
+	return data[event.get_address().die].write(event);
 }
 
-enum status Package::replace(Event &event, bool remove)
+enum status Package::replace(Event &event)
 {
 	assert(data != NULL);
-	return data[event.get_replace_address().die].replace(event, remove);
+	return data[event.get_replace_address().die].replace(event);
 }
 
-enum status Package::erase(Event &event, bool remove)
+enum status Package::erase(Event &event)
 {
 	assert(data != NULL && event.get_address().die < size && event.get_address().valid > PACKAGE);
-	enum status status = data[event.get_address().die].erase(event, remove);
+	enum status status = data[event.get_address().die].erase(event);
 	if(status == SUCCESS)
 		update_wear_stats(event.get_address());
 	return status;
 }
 
-enum status Package::merge(Event &event, bool remove)
+enum status Package::merge(Event &event)
 {
 	assert(data != NULL && event.get_address().die < size && event.get_address().valid > PACKAGE);
-	return data[event.get_address().die].merge(event, remove);
+	return data[event.get_address().die].merge(event);
 }
 
 const Ssd &Package::get_parent(void) const

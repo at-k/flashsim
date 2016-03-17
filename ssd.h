@@ -446,11 +446,11 @@ class Channel
 public:
 	Channel(double ctrl_delay = BUS_CTRL_DELAY, double data_delay = BUS_DATA_DELAY, uint table_size = BUS_TABLE_SIZE, uint max_connections = BUS_MAX_CONNECT);
 	~Channel(void);
-	enum status lock(double start_time, double duration, Event &event, bool remove = false);
+	enum status lock(double start_time, double duration, Event &event);
 	enum status connect(void);
 	enum status disconnect(void);
 	double ready_time(void);
-	void unlock(double current_time, bool remove = false);
+	void unlock(double current_time);
 
 
 	static bool timings_sorter(lock_times const& lhs, lock_times const& rhs);
@@ -481,7 +481,7 @@ class Bus
 public:
 	Bus(uint num_channels = SSD_SIZE, double ctrl_delay = BUS_CTRL_DELAY, double data_delay = BUS_DATA_DELAY, uint table_size = BUS_TABLE_SIZE, uint max_connections = BUS_MAX_CONNECT);
 	~Bus(void);
-	enum status lock(uint channel, double start_time, double duration, Event &event, bool remove = false);
+	enum status lock(uint channel, double start_time, double duration, Event &event);
 	enum status connect(uint channel);
 	enum status disconnect(uint channel);
 	Channel &get_channel(uint channel);
@@ -564,11 +564,11 @@ class Plane
 public:
 	Plane(const Die &parent, uint plane_size = PLANE_SIZE, double reg_read_delay = PLANE_REG_READ_DELAY, double reg_write_delay = PLANE_REG_WRITE_DELAY, long physical_address = 0);
 	~Plane(void);
-	enum status read(Event &event, bool remove = false);
-	enum status write(Event &event, bool remove = false);
-	enum status erase(Event &event, bool remove = false);
-	enum status replace(Event &event, bool remove = false);
-	enum status _merge(Event &event, bool remove = false);
+	enum status read(Event &event);
+	enum status write(Event &event);
+	enum status erase(Event &event);
+	enum status replace(Event &event);
+	enum status _merge(Event &event);
 	const Die &get_parent(void) const;
 	double get_last_erase_time(const Address &address) const;
 	ulong get_erases_remaining(const Address &address) const;
@@ -581,12 +581,12 @@ public:
 	ssd::uint get_num_valid(const Address &address) const;
 	ssd::uint get_num_invalid(const Address &address) const;
 	Block *get_block_pointer(const Address & address);
-	void unlock(double start_time, bool remove = false);
+	void unlock(double start_time);
 	static bool timings_sorter(lock_times const& lhs, lock_times const& rhs);
 	std::vector<lock_times> timings;
 private:
 	void update_wear_stats(void);
-	void serialize_access(double start_time, double duration, Event &event, bool remove = false);
+	void serialize_access(double start_time, double duration, Event &event);
 	enum status get_next_page(void);
 	uint size;
 	Block * const data;
@@ -608,12 +608,12 @@ class Die
 public:
 	Die(const Package &parent, Channel &channel, uint die_size = DIE_SIZE, long physical_address = 0);
 	~Die(void);
-	enum status read(Event &event, bool remove = false);
-	enum status write(Event &event, bool remove = false);
-	enum status erase(Event &event, bool remove = false);
-	enum status replace(Event &event, bool remove = false);
-	enum status merge(Event &event, bool remove = false);
-	enum status _merge(Event &event, bool remove = false);
+	enum status read(Event &event);
+	enum status write(Event &event);
+	enum status erase(Event &event);
+	enum status replace(Event &event);
+	enum status merge(Event &event);
+	enum status _merge(Event &event);
 	const Package &get_parent(void) const;
 	double get_last_erase_time(const Address &address) const;
 	ulong get_erases_remaining(const Address &address) const;
@@ -645,11 +645,11 @@ class Package
 public:
 	Package (const Ssd &parent, Channel &channel, uint package_size = PACKAGE_SIZE, long physical_address = 0);
 	~Package ();
-	enum status read(Event &event, bool remove = false);
-	enum status write(Event &event, bool remove = false);
-	enum status erase(Event &event, bool remove = false);
-	enum status replace(Event &event, bool remove = false);
-	enum status merge(Event &event, bool remove = false);
+	enum status read(Event &event);
+	enum status write(Event &event);
+	enum status erase(Event &event);
+	enum status replace(Event &event);
+	enum status merge(Event &event);
 	const Ssd &get_parent(void) const;
 	double get_last_erase_time (const Address &address) const;
 	ulong get_erases_remaining (const Address &address) const;
@@ -776,12 +776,12 @@ private:
 class FtlParent
 {
 public:
-	FtlParent(Controller &controller);
+	FtlParent(Controller &controller, Ssd &parent);
 
 	virtual ~FtlParent () {};
-	virtual enum status read(Event &event, bool &op_complete, double &end_time, bool actual_time = true) = 0;
-	virtual enum status write(Event &event, bool &op_complete, double &end_time, bool actual_time = true) = 0;
-	virtual enum status noop(Event &event, bool &op_complete, double &end_time, bool actual_time = true) = 0;
+	virtual enum status read(Event &event, bool &op_complete, double &end_time) = 0;
+	virtual enum status write(Event &event, bool &op_complete, double &end_time) = 0;
+	virtual enum status noop(Event &event, bool &op_complete, double &end_time) = 0;
 	virtual enum status trim(Event &event) = 0;
 	virtual void cleanup_block(Event &event, Block *block);
 
@@ -799,6 +799,7 @@ public:
 	Address resolve_logical_address(unsigned int logicalAddress);
 protected:
 	Controller &controller;
+	Ssd &ssd;
 };
 
 struct logical_page
@@ -860,16 +861,13 @@ class Cache
 public:
 	Cache();
 	~Cache();
-	bool present_in_cache(Event &event, bool actual_time);
-	void place_in_cache(Event &event, bool actual_time);
-	void invalidate(Event &event, bool actual_time);
+	bool present_in_cache(Event &event);
+	void place_in_cache(Event &event);
+	void invalidate(Event &event);
 private:
 	unsigned int size;
 	std::unordered_map<unsigned int, double> reverse_map; 
 	std::map<double, unsigned int> actual_cache;
-	std::map<double, unsigned int> future_cache;
-	void place_in_future_cache(Event &event);
-	void process_future(Event &event);
 	void insert(unsigned int address, double time);
 };
 
@@ -877,11 +875,11 @@ private:
 class FtlImpl_Page : public FtlParent
 {
 public:
-	FtlImpl_Page(Controller &controller);
+	FtlImpl_Page(Controller &controller, Ssd &parent);
 	~FtlImpl_Page();
-	enum status read(Event &event, bool &op_complete, double &end_time, bool actual_time = true);
-	enum status write(Event &event, bool &op_complete, double &end_time, bool actual_time = true);
-	enum status noop(Event &event, bool &op_complete, double &end_time, bool actual_time = true);
+	enum status read(Event &event, bool &op_complete, double &end_time);
+	enum status write(Event &event, bool &op_complete, double &end_time);
+	enum status noop(Event &event, bool &op_complete, double &end_time);
 	enum status trim(Event &event);
 	void get_min_max_erases();
 private:
@@ -914,7 +912,7 @@ private:
 	unsigned int get_block_starting_lba(unsigned int lba);
 	unsigned int get_logical_block_num(unsigned int lba);
 	Address find_write_location(Event &event, Address cur, bool *already_open);
-	bool increment_log_write_address(Event &event, Address asked_for, bool already_allocated, bool bg_write);
+	bool increment_log_write_address(Event &event, Address asked_for, bool already_allocated);
 	bool allocate_new_block(Address requested_address);
 	unsigned int get_next_block_lba(unsigned int lba);
 	Address get_next_block_pba(Address pba);
@@ -922,8 +920,8 @@ private:
 	enum status garbage_collect_default(Event &event);
 	enum status garbage_collect_cached(Event &event);
 	double process_background_tasks(Event &event);
-	double read_(Event &event, bool actual_time = true);
-	double write_(Event &event, bool actual_time = true);
+	double read_(Event &event);
+	double write_(Event &event);
 	void queue_required_bg_events(Event &event);
 	double process_ftl_queues(Event &event);
 	void move_required_pointers(unsigned int plane_num, unsigned int start, unsigned int end);
@@ -933,11 +931,11 @@ private:
 class FtlImpl_Fast : public FtlParent
 {
 public:
-	FtlImpl_Fast(Controller &controller);
+	FtlImpl_Fast(Controller &controller, Ssd &parent);
 	~FtlImpl_Fast();
-	enum status read(Event &event, bool &op_complete, double &end_time, bool actual_time = true);
-	enum status write(Event &event, bool &op_complete, double &end_time, bool actual_time = true);
-	enum status noop(Event &event, bool &op_complete, double &end_time, bool actual_time = true);
+	enum status read(Event &event, bool &op_complete, double &end_time);
+	enum status write(Event &event, bool &op_complete, double &end_time);
+	enum status noop(Event &event, bool &op_complete, double &end_time);
 	enum status trim(Event &event);
 	void get_min_max_erases();
 private:
@@ -1011,7 +1009,7 @@ public:
 	void print_ftl_statistics(FILE *fp);
 	const FtlParent &get_ftl(void) const;
 private:
-	enum status issue(Event &event_list, bool remove = false);
+	enum status issue(Event &event_list);
 	void translate_address(Address &address);
 	ssd::ulong get_erases_remaining(const Address &address) const;
 	void get_least_worn(Address &address) const;
@@ -1039,6 +1037,7 @@ public:
 	bool event_arrive(enum event_type type, ulong logical_address, uint size, double start_time, bool &op_complete, double &end_time, void *buffer);
 	void *get_result_buffer();
 	friend class Controller;
+	friend class FtlParent;
 	void print_statistics();
 	void reset_statistics();
 	void write_statistics(FILE *stream);
@@ -1047,13 +1046,14 @@ public:
 
 	void print_ftl_statistics(FILE *fp);
 	double ready_at(void);
+	Cache cache;
 private:
-	enum status read(Event &event, bool remove = false);
-	enum status write(Event &event, bool remove = false);
-	enum status erase(Event &event, bool remove = false);
-	enum status merge(Event &event, bool remove = false);
-	enum status replace(Event &event, bool remove = false);
-	enum status merge_replacement_block(Event &event, bool remove = false);
+	enum status read(Event &event);
+	enum status write(Event &event);
+	enum status erase(Event &event);
+	enum status merge(Event &event);
+	enum status replace(Event &event);
+	enum status merge_replacement_block(Event &event);
 	ulong get_erases_remaining(const Address &address) const;
 	void update_wear_stats(const Address &address);
 	void get_least_worn(Address &address) const;
@@ -1071,7 +1071,6 @@ private:
 	Controller controller;
 	Ram ram;
 	Bus bus;
-	Cache cache;
 	Package * const data;
 	ulong erases_remaining;
 	ulong least_worn;

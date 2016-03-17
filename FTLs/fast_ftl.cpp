@@ -33,8 +33,8 @@
 
 using namespace ssd;
 
-FtlImpl_Fast::FtlImpl_Fast(Controller &controller):
-	FtlParent(controller)
+FtlImpl_Fast::FtlImpl_Fast(Controller &controller, Ssd &parent):
+	FtlParent(controller, parent)
 {
 	addressSize = log(NUMBER_OF_ADDRESSABLE_BLOCKS)/log(2);
 	addressShift = log(BLOCK_SIZE)/log(2);
@@ -93,11 +93,11 @@ void FtlImpl_Fast::initialize_log_pages()
 	}
 	Block_manager::instance()->init_free_list(event);
 }
-enum status FtlImpl_Fast::noop(Event &event, bool &op_complete, double &end_time, bool actual_time)
+enum status FtlImpl_Fast::noop(Event &event, bool &op_complete, double &end_time)
 {
 	return SUCCESS;
 }
-enum status FtlImpl_Fast::read(Event &event, bool &op_complete, double &end_time, bool actual_time)
+enum status FtlImpl_Fast::read(Event &event, bool &op_complete, double &end_time)
 {
 	//PRINT_FUNC;
 	//printf("FTL reading %d\n", event.get_logical_address());
@@ -156,10 +156,10 @@ enum status FtlImpl_Fast::read(Event &event, bool &op_complete, double &end_time
 
 	// Statistics
 	controller.stats.numFTLRead++;
-	return controller.issue(event, true);
+	return controller.issue(event);
 }
 
-enum status FtlImpl_Fast::write(Event &event, bool &op_complete, double &end_time, bool actual_time)
+enum status FtlImpl_Fast::write(Event &event, bool &op_complete, double &end_time)
 {
 	//PRINT_FUNC;
 	//printf("FTL writing %d\n", event.get_logical_address());
@@ -211,7 +211,7 @@ enum status FtlImpl_Fast::write(Event &event, bool &op_complete, double &end_tim
 	
 
 	if(issueEventRequired)
-		return controller.issue(event, true);
+		return controller.issue(event);
 	else
 		return logWriteReturnStatus;	
 }
@@ -365,7 +365,7 @@ enum status FtlImpl_Fast::merge_sequential(Event &event, bool issueWrite)
 		if(issueWrite && i==lbnOffset)
 		{
 			event.set_address(Address(newDataBlock.get_linear_address() + i, PAGE));
-			retStatus = controller.issue(event, true);
+			retStatus = controller.issue(event);
 		}
 		else
 		{
