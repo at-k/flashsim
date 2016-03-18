@@ -856,14 +856,6 @@ struct required_bg_events_pointer
 };
 
 
-struct cache_entry
-{
-	unsigned int logical_address;
-	Address physical_address;
-	double time;
-	bool evict_priority; //true if this should not be evicted because it is a part of some ongoing erase operation
-};
-
 class Cache
 {
 public:
@@ -871,13 +863,12 @@ public:
 	~Cache();
 	bool present_in_cache(Event &event);
 	void place_in_cache(Event &event);
-	bool add_priority_plane(unsigned int plane_num);
-	bool remove_priority_plane(unsigned int plane_num);
+	void invalidate(Event &event);
 private:
 	unsigned int size;
-	std::unordered_map<unsigned int, unsigned int> logical_address_map; 
-	struct cache_entry *cache;
-	std::vector<unsigned int>priority_planes;
+	std::unordered_map<unsigned int, double> reverse_map; 
+	std::map<double, unsigned int> actual_cache;
+	void insert(unsigned int address, double time);
 };
 
 

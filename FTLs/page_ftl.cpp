@@ -517,9 +517,6 @@ enum status FtlImpl_Page::read(Event &event, bool &op_complete, double &end_time
 		return FAILURE;
 	}
 
-	Address read_address = logical_page_list[logical_page_num].physical_address;
-	event.set_address(read_address);
-
 	if(ssd.cache.present_in_cache(event))
 	{
 		end_time = read_(event);
@@ -527,6 +524,8 @@ enum status FtlImpl_Page::read(Event &event, bool &op_complete, double &end_time
 		return SUCCESS;
 	}
 
+	Address read_address = logical_page_list[logical_page_num].physical_address;
+	event.set_address(read_address);
 	unsigned int plane_num = read_address.package*PACKAGE_SIZE*DIE_SIZE + read_address.die*DIE_SIZE + read_address.plane;
 	struct ftl_event fg_read;
 	fg_read.type = READ;
