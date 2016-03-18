@@ -856,6 +856,14 @@ struct required_bg_events_pointer
 };
 
 
+struct cache_entry
+{
+	unsigned int logical_address;
+	Address physical_address;
+	double time;
+	bool evict_priority;
+};
+
 class Cache
 {
 public:
@@ -863,12 +871,13 @@ public:
 	~Cache();
 	bool present_in_cache(Event &event);
 	void place_in_cache(Event &event);
-	void invalidate(Event &event);
+	bool add_priority_plane(unsigned int plane_num);
+	bool remove_priority_plane(unsigned int plane_num);
 private:
 	unsigned int size;
-	std::unordered_map<unsigned int, double> reverse_map; 
-	std::map<double, unsigned int> actual_cache;
-	void insert(unsigned int address, double time);
+	std::unordered_map<unsigned int, unsigned int> logical_address_map; 
+	std::vector<unsigned int> priority_planes;
+	struct cache_entry *cached_pages;
 };
 
 
@@ -1037,7 +1046,6 @@ public:
 	bool event_arrive(enum event_type type, ulong logical_address, uint size, double start_time, bool &op_complete, double &end_time, void *buffer);
 	void *get_result_buffer();
 	friend class Controller;
-	friend class FtlParent;
 	void print_statistics();
 	void reset_statistics();
 	void write_statistics(FILE *stream);

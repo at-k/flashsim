@@ -761,39 +761,6 @@ enum status FtlImpl_Page::garbage_collect_default(Event &event)
 	std::list<struct ssd_block>::iterator max_benefit_block_reference = filled_block_list.end();
 	float max_benefit = 0, cur_benefit;
 	bool cleaning_possible = false;
-	/*
-
-	// This is a part of the code which can be used to do wear levelling
-	// As of now, there is no wear leveling. This plus some more logic while
-	// choosing the target block will enable the same
-
-	double average_lifetime_left = 0, min_lifetime_left = -1, max_lifetime_left = -1;
-	for(iter=allocated_block_list.begin();iter!=allocated_block_list.end();iter++)
-	{
-		average_lifetime_left += (double)iter->lifetime_left;
-		if(iter->lifetime_left < min_lifetime_left || min_lifetime_left == -1)
-			min_lifetime_left = iter->lifetime_left;
-		if(iter->lifetime_left > max_lifetime_left || max_lifetime_left == -1)
-			max_lifetime_left = iter->lifetime_left;
-	}
-	for(iter=free_block_list.begin();iter!=free_block_list.end();iter++)
-	{
-		average_lifetime_left += (double)iter->lifetime_left;
-		if(iter->lifetime_left < min_lifetime_left || min_lifetime_left == -1)
-			min_lifetime_left = iter->lifetime_left;
-		if(iter->lifetime_left > max_lifetime_left || max_lifetime_left == -1)
-			max_lifetime_left = iter->lifetime_left;
-	}
-	for(iter=filled_block_list.begin();iter!=filled_block_list.end();iter++)
-	{
-		average_lifetime_left += (double)iter->lifetime_left;
-		if(iter->lifetime_left < min_lifetime_left || min_lifetime_left == -1)
-			min_lifetime_left = iter->lifetime_left;
-		if(iter->lifetime_left > max_lifetime_left || max_lifetime_left == -1)
-			max_lifetime_left = iter->lifetime_left;
-	}
-	average_lifetime_left = average_lifetime_left/(double)(RAW_SSD_BLOCKS);
-	*/
 	
 
 	for(iter=allocated_block_list.begin();iter!=allocated_block_list.end();)
@@ -926,40 +893,6 @@ enum status FtlImpl_Page::garbage_collect_cached(Event &event)
 	float max_benefit = 0, cur_benefit;
 	unsigned int max_benefit_plane = SSD_SIZE*PACKAGE_SIZE*DIE_SIZE;
 	bool cleaning_possible = false;
-	/*
-	
-	// This is a part of the code which can be used to do wear levelling
-	// As of now, there is no wear leveling. This plus some more logic while
-	// choosing the target block will enable the same
-	
-	double average_lifetime_left = 0, min_lifetime_left = -1, max_lifetime_left = -1;
-	for(iter=allocated_block_list.begin();iter!=allocated_block_list.end();iter++)
-	{
-		average_lifetime_left += (double)iter->lifetime_left;
-		if(iter->lifetime_left < min_lifetime_left || min_lifetime_left == -1)
-			min_lifetime_left = iter->lifetime_left;
-		if(iter->lifetime_left > max_lifetime_left || max_lifetime_left == -1)
-			max_lifetime_left = iter->lifetime_left;
-	}
-	for(iter=free_block_list.begin();iter!=free_block_list.end();iter++)
-	{
-		average_lifetime_left += (double)iter->lifetime_left;
-		if(iter->lifetime_left < min_lifetime_left || min_lifetime_left == -1)
-			min_lifetime_left = iter->lifetime_left;
-		if(iter->lifetime_left > max_lifetime_left || max_lifetime_left == -1)
-			max_lifetime_left = iter->lifetime_left;
-	}
-	for(iter=filled_block_list.begin();iter!=filled_block_list.end();iter++)
-	{
-		average_lifetime_left += (double)iter->lifetime_left;
-		if(iter->lifetime_left < min_lifetime_left || min_lifetime_left == -1)
-			min_lifetime_left = iter->lifetime_left;
-		if(iter->lifetime_left > max_lifetime_left || max_lifetime_left == -1)
-			max_lifetime_left = iter->lifetime_left;
-	}
-	average_lifetime_left = average_lifetime_left/(double)(RAW_SSD_BLOCKS);
-	*/
-	
 
 	for(iter=allocated_block_list.begin();iter!=allocated_block_list.end();)
 	{
