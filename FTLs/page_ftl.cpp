@@ -34,7 +34,7 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller, Ssd &parent):FtlParent(contro
 	gc_required(false),
 	RAW_SSD_BLOCKS(SSD_SIZE*PACKAGE_SIZE*DIE_SIZE*PLANE_SIZE),
 	ADDRESSABLE_SSD_PAGES(NUMBER_OF_ADDRESSABLE_BLOCKS * BLOCK_SIZE),
-	clean_threshold(float(OVERPROVISIONING)/100 * SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * PLANE_SIZE),
+	clean_threshold((SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * PLANE_SIZE) - NUMBER_OF_ADDRESSABLE_BLOCKS),
 //	low_watermark(GC_SCHEME == 0 ? 1 : 25),
 	READ_PREFERENCE(true),
 	//open_events(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE), 
@@ -66,6 +66,7 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller, Ssd &parent):FtlParent(contro
 		}
 		new_ssd_block.last_page_written = 0;
 		new_ssd_block.scheduled_for_erasing = false;
+		new_ssd_block.average_age = 0;
 		free_block_list.push_back(new_ssd_block);
 		next_block_lba = get_next_block_lba(next_block_lba);
 		if(next_block_lba == 0)
@@ -75,7 +76,7 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller, Ssd &parent):FtlParent(contro
 	filled_block_list.clear();
 	queue_lengths = (unsigned int *)malloc(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * sizeof(unsigned int));
 	log_write_address.valid = NONE;
-	low_watermark = GC_SCHEME == 0 ? 1 : 25;
+	low_watermark = GC_SCHEME == MAX_BLOCKS_PER_GC;
 	plane_free_times = (double *)malloc(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * sizeof(double));
 	for(unsigned int i=0;i<SSD_SIZE * PACKAGE_SIZE * DIE_SIZE;i++)
 	{
@@ -517,6 +518,8 @@ enum status FtlImpl_Page::read(Event &event, bool &op_complete, double &end_time
 		return FAILURE;
 	}
 
+	Address read_address = logical_page_list[logical_page_num].physical_address;
+	event.set_address(read_address);
 	if(ssd.cache.present_in_cache(event))
 	{
 		end_time = read_(event);
@@ -524,8 +527,6 @@ enum status FtlImpl_Page::read(Event &event, bool &op_complete, double &end_time
 		return SUCCESS;
 	}
 
-	Address read_address = logical_page_list[logical_page_num].physical_address;
-	event.set_address(read_address);
 	unsigned int plane_num = read_address.package*PACKAGE_SIZE*DIE_SIZE + read_address.die*DIE_SIZE + read_address.plane;
 	struct ftl_event fg_read;
 	fg_read.type = READ;
@@ -632,7 +633,6 @@ enum status FtlImpl_Page::write(Event &event, bool &op_complete, double &end_tim
 
 double FtlImpl_Page::read_(Event &event)
 {
-	controller.stats.numRead++;
 	controller.issue(event);
 	return event.get_total_time();
 }
@@ -709,7 +709,6 @@ double FtlImpl_Page::write_(Event &event)
 	}
 	assert(currently_mapped_address.valid != PAGE || !need_invalidation);
 	event.set_address(write_address);
-	controller.stats.numWrite++;
 	controller.issue(event);
 	logical_page_list[logical_page_num].physical_address = write_address;
 	(*log_write_iter).last_write_time = latest_write_time++;    
@@ -932,6 +931,7 @@ enum status FtlImpl_Page::garbage_collect_cached(Event &event)
 
 	double plane_valid_page_count[SSD_SIZE*PACKAGE_SIZE*DIE_SIZE];
 	double plane_average_age[SSD_SIZE*PACKAGE_SIZE*DIE_SIZE];
+	unsigned int num_possible_blocks[SSD_SIZE*PACKAGE_SIZE*DIE_SIZE];
 
 	std::vector<std::pair<unsigned int, float>> possible_erase_blocks[SSD_SIZE*PACKAGE_SIZE*DIE_SIZE];
 
@@ -939,6 +939,7 @@ enum status FtlImpl_Page::garbage_collect_cached(Event &event)
 	{
 		plane_valid_page_count[p_num] = 0;
 		plane_average_age[p_num] = 0;
+		num_possible_blocks[p_num] = 0;
 	}
 
 	for(iter=filled_block_list.begin();iter!=filled_block_list.end();iter++)
@@ -955,11 +956,17 @@ enum status FtlImpl_Page::garbage_collect_cached(Event &event)
 		{
 			cur_benefit = 0;
 		}
+		else
+		{
+			num_possible_blocks[cur_plane_num]++;
+		}
 		possible_erase_blocks[cur_plane_num].push_back(std::pair<unsigned int, float>(std::distance(filled_block_list.begin(), iter), cur_benefit));
 	}
 
 	for(unsigned int p_num = 0;p_num < SSD_SIZE*PACKAGE_SIZE*DIE_SIZE;p_num++)
 	{
+		if(num_possible_blocks[p_num] < MIN_BLOCKS_PER_GC)
+			continue;
 		plane_valid_page_count[p_num] = (double)plane_valid_page_count[p_num]/((double)(PLANE_SIZE * BLOCK_SIZE));
 		plane_average_age[p_num] = (double)plane_average_age[p_num]/(double)PLANE_SIZE;
 		if(plane_valid_page_count[p_num] == 1)
@@ -1009,9 +1016,9 @@ enum status FtlImpl_Page::garbage_collect_cached(Event &event)
 
 	std::vector<unsigned int> erase_block_list;
 	std::sort(possible_erase_blocks[target_plane].begin(), possible_erase_blocks[target_plane].end(), compare_possible_erase_blocks);
-	//TODO hardcoded "magic" number 25
-	unsigned int num_blocks_to_gc = possible_erase_blocks[target_plane].size() < 25 ? possible_erase_blocks[target_plane].size() : 25;
-	//unsigned int num_blocks_to_gc = 1;
+	
+	unsigned int num_blocks_to_gc = possible_erase_blocks[target_plane].size() < MAX_BLOCKS_PER_GC ? possible_erase_blocks[target_plane].size() : MAX_BLOCKS_PER_GC;
+	
 	for(unsigned int top_candidate = 0;top_candidate < num_blocks_to_gc;top_candidate++)
 		erase_block_list.push_back(possible_erase_blocks[target_plane][top_candidate].first);
 
@@ -1173,6 +1180,8 @@ double FtlImpl_Page::process_background_tasks(Event &event)
 				perform_first_task = false;
 			if(perform_first_task && !(urgent_cleaning && first_event.type == WRITE ))
 			{
+				if(first)
+					ssd.cache.add_priority_plane(plane_num);
 				bool is_erase = false;
 				if(first_event.type == READ)
 				{
@@ -1268,6 +1277,10 @@ double FtlImpl_Page::process_background_tasks(Event &event)
 		if(background_events[plane_num].size() > 0 && background_events[plane_num].front().start_time < ret_time)
 		{
 			ret_time = background_events[plane_num].front().start_time;
+		}
+		else if(background_events[plane_num].size() == 0)
+		{
+			ssd.cache.remove_priority_plane(plane_num);
 		}
 	}
 	if(urgent_cleaning)
@@ -1367,6 +1380,8 @@ void FtlImpl_Page::queue_required_bg_events(Event &event)
 	//while(cur_plane_bg_events.size() > 0 && urgent_cleaning)
 	while(background_events[plane_num].size() > 0 && urgent_cleaning)
 	{
+		if(first)
+			ssd.cache.add_priority_plane(plane_num);
 		//struct ftl_event first_event = cur_plane_bg_events.front();
 		struct ftl_event first_event = background_events[plane_num].front();
 		first_event.start_time = time;
@@ -1479,6 +1494,8 @@ void FtlImpl_Page::queue_required_bg_events(Event &event)
 		}
 		first = false;
 	}
+	if(background_events[plane_num].size() == 0)
+		ssd.cache.remove_priority_plane(plane_num);
 }
 
 
@@ -1571,7 +1588,6 @@ double FtlImpl_Page::process_ftl_queues(Event &event)
 						erase_block_pointer->lifetime_left -= 1;
 						erase_block_pointer->scheduled_for_erasing = false;
 						first_event.end_time = next_event_time;
-						controller.stats.numErase++;
 					}
 					else if(first_event.type == READ)
 					{

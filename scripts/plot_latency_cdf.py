@@ -15,8 +15,8 @@ def main():
 
         plt.plot(xvals, yvals, label=fname)
     
-    #plt.xlim((0, 20000))
-    plt.ylim((0.999, 1))
+    plt.xlim((0, 20000))
+    plt.ylim((0.95, 1))
     plt.legend(loc = "lower right")
     #plt.show()
     plt.savefig(sys.argv[2+num_files]+'.png')

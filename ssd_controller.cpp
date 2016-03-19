@@ -107,6 +107,7 @@ enum status Controller::issue(Event &event_list)
 					return FAILURE;
 			}
 			ssd.cache.place_in_cache(*cur);
+			stats.numRead++;
 		}
 		else if(cur -> get_event_type() == WRITE)
 		{
@@ -119,6 +120,7 @@ enum status Controller::issue(Event &event_list)
 				|| ssd.replace(*cur) == FAILURE)
 				return FAILURE;
 			ssd.cache.place_in_cache(*cur);
+			stats.numWrite++;
 		}
 		else if(cur -> get_event_type() == ERASE)
 		{
@@ -127,6 +129,7 @@ enum status Controller::issue(Event &event_list)
 			if(ssd.bus.lock(cur -> get_address().package, cur -> get_total_time(), BUS_CTRL_DELAY, *cur) == FAILURE
 				|| ssd.erase(*cur) == FAILURE)
 				return FAILURE;
+			stats.numErase++;
 		}
 		else if(cur -> get_event_type() == MERGE)
 		{

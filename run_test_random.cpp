@@ -111,10 +111,12 @@ int main(int argc, char **argv)
 
 	unsigned int occupied = util_percent*lastLBA/100;
 	unsigned int i=0;
+	unsigned int location = 0;
 	for (i = 0; i < occupied; i++)
 	{
 		write_complete = false;
-		bool result = ssd -> event_arrive(WRITE, i%lastLBA, 1, write_end_time, write_complete, write_end_time);
+		location = rand()%lastLBA;
+		bool result = ssd -> event_arrive(WRITE, location, 1, write_end_time, write_complete, write_end_time);
 		if(result == false)
 		{
 			printf("returning failure\n");
@@ -129,7 +131,7 @@ int main(int argc, char **argv)
 			prev_noop_time = next_noop_time;
 			k++;
 		}
-		addresses.insert(i);
+		addresses.insert(location);
 	}
 	initial_delay = write_end_time;
 	printf("Completed\n");
@@ -161,7 +163,6 @@ int main(int argc, char **argv)
 		op_rw_type[i] = OP_READ;
 	}	
 	next_noop_time = initial_delay;
-	unsigned int location = 0;
 	unsigned int write_count = 0;
 	bool loop = true;
 	for(unsigned int i=0;i<q_depth;i++)
@@ -179,6 +180,7 @@ int main(int argc, char **argv)
 			}
 			op_addresses[i] = location;
 			op_rw_type[i] = OP_WRITE;
+			addresses.insert(location);
 		}	
 		else
 		{
@@ -286,6 +288,7 @@ int main(int argc, char **argv)
 			result = ssd->event_arrive(WRITE, location, 1, (double) op_start_time[earliest_event_index], 
 					op_complete[earliest_event_index], op_complete_time[earliest_event_index]);
 			op_rw_type[earliest_event_index] = OP_WRITE;
+			addresses.insert(location);
 		}	
 		else
 		{

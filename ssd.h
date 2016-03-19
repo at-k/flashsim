@@ -143,9 +143,20 @@ extern const uint MAP_DIRECTORY_SIZE;
  */
 extern const uint FTL_IMPLEMENTATION;
 
+/* GC SCHME */
 extern const uint GC_SCHEME;
+
+/* Maximum blocks to queue up for cleaning, 0 means no restriction */
 extern const uint MAX_GC_BLOCKS;
 
+/* Maximum planes to clean in parallel, 0 means no restriction */
+extern const uint MAX_GC_PLANES;
+
+/* Maximum blocks to clean in one call to GC */
+extern const uint MAX_BLOCKS_PER_GC;
+
+/* Minimum blocks to clean in one call the GC */
+extern const uint MAX_BLOCKS_PER_GC;
 /*
  * LOG page limit for FAST.
  */
@@ -817,6 +828,7 @@ struct ssd_block
   bool *reserved_page;
   unsigned int last_page_written;
   bool scheduled_for_erasing;
+  double average_age;
 };
 
 enum ftl_event_process{BACKGROUND, FOREGROUND};
