@@ -156,7 +156,7 @@ extern const uint MAX_GC_PLANES;
 extern const uint MAX_BLOCKS_PER_GC;
 
 /* Minimum blocks to clean in one call the GC */
-extern const uint MAX_BLOCKS_PER_GC;
+extern const uint MIN_BLOCKS_PER_GC;
 /*
  * LOG page limit for FAST.
  */
@@ -816,19 +816,19 @@ protected:
 struct logical_page
 {
 	Address physical_address;
+	double write_time;
 };
 
 struct ssd_block
 {
-  Address physical_address;
-  unsigned int last_write_time;
-  unsigned int valid_page_count;
-  unsigned int lifetime_left;
-  unsigned int *page_mapping;
-  bool *reserved_page;
-  unsigned int last_page_written;
-  bool scheduled_for_erasing;
-  double average_age;
+	Address physical_address;
+//	unsigned int last_write_time;
+	unsigned int valid_page_count;
+	unsigned int lifetime_left;
+	unsigned int *page_mapping;
+	bool *reserved_page;
+	unsigned int last_page_written;
+	bool scheduled_for_erasing;
 };
 
 enum ftl_event_process{BACKGROUND, FOREGROUND};
@@ -926,7 +926,7 @@ private:
 	double bg_events_time;
 	double next_event_time;
 
-	double get_average_age(struct ssd_block block);
+	double get_average_age(struct ssd_block &block);
 	Address translate_lba_pba(unsigned int lba);
 	unsigned int translate_pba_lba(Address pba);
 	unsigned int get_page_number_in_block(unsigned int lba);

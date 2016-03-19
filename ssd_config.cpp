@@ -157,7 +157,7 @@ uint MAX_GC_PLANES = 0;
  * Minimum and Maximum blocks to schedule for cleaning in one call to the GC
  * Maximum is different from minimum only for the caching scheme
  */
-uint MAC_BLOCKS_PER_GC = 1;
+uint MAX_BLOCKS_PER_GC = 1;
 uint MIN_BLOCKS_PER_GC = 1;
 
 
@@ -348,7 +348,7 @@ void print_config(FILE *stream) {
 	fprintf(stream, "FTL_IMPLEMENTATION: %i\n", FTL_IMPLEMENTATION);
 	fprintf(stream, "GC_SCHEME: %i\n", GC_SCHEME);
 	fprintf(stream, "MAX_GC_BLOCKS: %i\n", MAX_GC_BLOCKS);
-	fprintf(stream, "MAX_GC_PLANE: %i\n", MAX_GC_PLANE);
+	fprintf(stream, "MAX_GC_PLANE: %i\n", MAX_GC_PLANES);
 	fprintf(stream, "MIN_BLOCKS_PER_GC: %d\n", MIN_BLOCKS_PER_GC);
 	fprintf(stream, "MAX_BLOCKS_PER_GC: %d\n", MAX_BLOCKS_PER_GC);
 	fprintf(stream, "CACHE_SIZE: %i\n", CACHE_SIZE);

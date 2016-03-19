@@ -47,6 +47,7 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller, Ssd &parent):FtlParent(contro
 	for (unsigned int i=0;i<ADDRESSABLE_SSD_PAGES;i++)
 	{
 		logical_page_list[i].physical_address.valid = NONE;
+		logical_page_list[i].write_time = -1;
 	}
 	unsigned int next_block_lba = 0;
 	for(unsigned int i=0;i<RAW_SSD_BLOCKS;i++)
@@ -54,7 +55,7 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller, Ssd &parent):FtlParent(contro
 		struct ssd_block new_ssd_block;
 		new_ssd_block.physical_address = translate_lba_pba(next_block_lba);
 		new_ssd_block.physical_address.valid = BLOCK;
-		new_ssd_block.last_write_time = 0;
+//		new_ssd_block.last_write_time = 0;
 		new_ssd_block.valid_page_count = 0;
 		new_ssd_block.lifetime_left = BLOCK_ERASES;
 		new_ssd_block.page_mapping = (unsigned int *)malloc(BLOCK_SIZE * sizeof(unsigned int));
@@ -66,7 +67,6 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller, Ssd &parent):FtlParent(contro
 		}
 		new_ssd_block.last_page_written = 0;
 		new_ssd_block.scheduled_for_erasing = false;
-		new_ssd_block.average_age = 0;
 		free_block_list.push_back(new_ssd_block);
 		next_block_lba = get_next_block_lba(next_block_lba);
 		if(next_block_lba == 0)
@@ -146,7 +146,7 @@ Address FtlImpl_Page::get_next_block_pba(Address pba)
 	return next_address;
 }
 
-double FtlImpl_Page::get_average_age(struct ssd_block block)
+double FtlImpl_Page::get_average_age(struct ssd_block &block)
 {
 	if(block.scheduled_for_erasing)
 		assert(false);
@@ -159,7 +159,7 @@ double FtlImpl_Page::get_average_age(struct ssd_block block)
 		supposed_address.valid = PAGE;
 		if(actual_address == supposed_address)
 		{
-			unsigned int write_time = block.last_write_time - (BLOCK_SIZE - 1 - i);
+			unsigned int write_time = logical_page_list[block.page_mapping[i]].write_time;
 			long int age = latest_write_time - write_time;
 			if(age < 0)
 				age = latest_write_time + (UINT_MAX - write_time) + 1;
@@ -251,7 +251,7 @@ Address FtlImpl_Page::find_write_location(Event &event, Address cur, bool *alrea
 		{
 			struct ssd_block filled_block;
 			filled_block.physical_address = iter->physical_address;
-			filled_block.last_write_time = iter->last_write_time;
+			//filled_block.last_write_time = iter->last_write_time;
 			filled_block.valid_page_count = iter->valid_page_count;
 			filled_block.lifetime_left = iter->lifetime_left;
 			filled_block.last_page_written = iter->last_page_written;
@@ -711,7 +711,8 @@ double FtlImpl_Page::write_(Event &event)
 	event.set_address(write_address);
 	controller.issue(event);
 	logical_page_list[logical_page_num].physical_address = write_address;
-	(*log_write_iter).last_write_time = latest_write_time++;    
+	logical_page_list[logical_page_num].write_time = latest_write_time++;
+	//(*log_write_iter).last_write_time = latest_write_time++;    
 	(*log_write_iter).valid_page_count += 1;
 	(*log_write_iter).page_mapping[write_address.page] = logical_page_num;  
 	mark_reserved(write_address, false);
@@ -773,7 +774,7 @@ enum status FtlImpl_Page::garbage_collect_default(Event &event)
 		{
 			struct ssd_block filled_block;
 			filled_block.physical_address = iter->physical_address;
-			filled_block.last_write_time = iter->last_write_time;
+			//filled_block.last_write_time = iter->last_write_time;
 			filled_block.valid_page_count = iter->valid_page_count;
 			filled_block.lifetime_left = iter->lifetime_left;
 			filled_block.last_page_written = iter->last_page_written;
@@ -904,7 +905,7 @@ enum status FtlImpl_Page::garbage_collect_cached(Event &event)
 		{
 			struct ssd_block filled_block;
 			filled_block.physical_address = iter->physical_address;
-			filled_block.last_write_time = iter->last_write_time;
+			//filled_block.last_write_time = iter->last_write_time;
 			filled_block.valid_page_count = iter->valid_page_count;
 			filled_block.lifetime_left = iter->lifetime_left;
 			filled_block.last_page_written = iter->last_page_written;
@@ -963,8 +964,14 @@ enum status FtlImpl_Page::garbage_collect_cached(Event &event)
 		possible_erase_blocks[cur_plane_num].push_back(std::pair<unsigned int, float>(std::distance(filled_block_list.begin(), iter), cur_benefit));
 	}
 
+	unsigned int cur_gc_planes_count = 0;
 	for(unsigned int p_num = 0;p_num < SSD_SIZE*PACKAGE_SIZE*DIE_SIZE;p_num++)
 	{
+		if(bg_cleaning_blocks[p_num].size() > 0)
+		{
+			cur_gc_planes_count++;
+			continue;
+		}
 		if(num_possible_blocks[p_num] < MIN_BLOCKS_PER_GC)
 			continue;
 		plane_valid_page_count[p_num] = (double)plane_valid_page_count[p_num]/((double)(PLANE_SIZE * BLOCK_SIZE));
@@ -978,6 +985,10 @@ enum status FtlImpl_Page::garbage_collect_cached(Event &event)
 			max_benefit_plane = p_num; 
 			cleaning_possible = true;
 		}    
+	}
+	if(cur_gc_planes_count >= MAX_GC_PLANES)
+	{
+		cleaning_possible = false;
 	}
 	if(!cleaning_possible)
 	{
