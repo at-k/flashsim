@@ -76,7 +76,7 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller, Ssd &parent):FtlParent(contro
 	filled_block_list.clear();
 	queue_lengths = (unsigned int *)malloc(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * sizeof(unsigned int));
 	log_write_address.valid = NONE;
-	low_watermark = GC_SCHEME == MAX_BLOCKS_PER_GC;
+	low_watermark = MAX_BLOCKS_PER_GC;
 	plane_free_times = (double *)malloc(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * sizeof(double));
 	for(unsigned int i=0;i<SSD_SIZE * PACKAGE_SIZE * DIE_SIZE;i++)
 	{
@@ -730,12 +730,19 @@ enum status FtlImpl_Page::garbage_collect(Event &event)
 {
 	enum status ret_status;
 	unsigned int total_bg_cleaning_blocks = 0;
+	unsigned int total_bg_cleaning_planes = 0;
 
 	for(unsigned int i=0;i<SSD_SIZE*PACKAGE_SIZE*DIE_SIZE;i++)
 	{
 		total_bg_cleaning_blocks += bg_cleaning_blocks[i].size();
+		if(bg_cleaning_blocks[i].size() > 0)
+			total_bg_cleaning_planes++;
 	}
-	if(total_bg_cleaning_blocks >= MAX_GC_BLOCKS)
+	if(MAX_GC_BLOCKS > 0 && total_bg_cleaning_blocks >= MAX_GC_BLOCKS)
+	{
+		return FAILURE;
+	}
+	if(MAX_GC_PLANES > 0 && GC_SCHEME == 1 && total_bg_cleaning_planes >= MAX_GC_PLANES)
 	{
 		return FAILURE;
 	}
@@ -824,7 +831,7 @@ enum status FtlImpl_Page::garbage_collect_default(Event &event)
 	}
 	if(!cleaning_possible)
 	{
-		printf("cleaning is not possible\n");
+		//printf("cleaning is not possible\n");
 		return FAILURE;
 	} 
 	
@@ -927,7 +934,6 @@ enum status FtlImpl_Page::garbage_collect_cached(Event &event)
 			iter++;
 		}
 	}
-	//TODO Use a policy that takes into account that multiple blocks are gonna be erased
 	cleaning_possible = false;
 
 	double plane_valid_page_count[SSD_SIZE*PACKAGE_SIZE*DIE_SIZE];
@@ -964,14 +970,14 @@ enum status FtlImpl_Page::garbage_collect_cached(Event &event)
 		possible_erase_blocks[cur_plane_num].push_back(std::pair<unsigned int, float>(std::distance(filled_block_list.begin(), iter), cur_benefit));
 	}
 
-	unsigned int cur_gc_planes_count = 0;
+	//unsigned int cur_gc_planes_count = 0;
 	for(unsigned int p_num = 0;p_num < SSD_SIZE*PACKAGE_SIZE*DIE_SIZE;p_num++)
 	{
-		if(bg_cleaning_blocks[p_num].size() > 0)
-		{
-			cur_gc_planes_count++;
-			continue;
-		}
+	//	if(bg_cleaning_blocks[p_num].size() > 0)
+	//	{
+	//		cur_gc_planes_count++;
+	//		continue;
+	//	}
 		if(num_possible_blocks[p_num] < MIN_BLOCKS_PER_GC)
 			continue;
 		plane_valid_page_count[p_num] = (double)plane_valid_page_count[p_num]/((double)(PLANE_SIZE * BLOCK_SIZE));
@@ -986,13 +992,13 @@ enum status FtlImpl_Page::garbage_collect_cached(Event &event)
 			cleaning_possible = true;
 		}    
 	}
-	if(cur_gc_planes_count >= MAX_GC_PLANES)
-	{
-		cleaning_possible = false;
-	}
+	//if(cur_gc_planes_count >= MAX_GC_PLANES)
+	//{
+	//	cleaning_possible = false;
+	//}
 	if(!cleaning_possible)
 	{
-		printf("cleaning is not possible\n");
+		//printf("cleaning is not possible\n");
 		return FAILURE;
 	} 
 	unsigned int target_plane = max_benefit_plane;

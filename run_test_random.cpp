@@ -180,7 +180,7 @@ int main(int argc, char **argv)
 			}
 			op_addresses[i] = location;
 			op_rw_type[i] = OP_WRITE;
-			addresses.insert(location);
+			//addresses.insert(location);
 		}	
 		else
 		{
@@ -190,7 +190,6 @@ int main(int argc, char **argv)
 			{
 				location = rand()%lastLBA;
 			}
-			
 			result = ssd->event_arrive(READ, location, 1, (double) op_start_time[i], op_complete[i], op_complete_time[i]);
 			if(result == -1)
 			{
@@ -288,7 +287,7 @@ int main(int argc, char **argv)
 			result = ssd->event_arrive(WRITE, location, 1, (double) op_start_time[earliest_event_index], 
 					op_complete[earliest_event_index], op_complete_time[earliest_event_index]);
 			op_rw_type[earliest_event_index] = OP_WRITE;
-			addresses.insert(location);
+			//addresses.insert(location);
 		}	
 		else
 		{
