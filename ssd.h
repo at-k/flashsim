@@ -789,7 +789,7 @@ class FtlParent
 public:
 	FtlParent(Controller &controller, Ssd &parent);
 
-	virtual ~FtlParent () {};
+	virtual ~FtlParent () = 0;
 	virtual enum status read(Event &event, bool &op_complete, double &end_time) = 0;
 	virtual enum status write(Event &event, bool &op_complete, double &end_time) = 0;
 	virtual enum status noop(Event &event, bool &op_complete, double &end_time) = 0;
@@ -919,7 +919,6 @@ private:
 	std::list<struct ssd_block> free_block_list;
 	std::list<struct ssd_block> allocated_block_list;
 	std::list<struct ssd_block> filled_block_list;
-	unsigned int *queue_lengths;
 	Address log_write_address;
 	unsigned int low_watermark;
 
@@ -1047,6 +1046,7 @@ private:
 	Block *get_block_pointer(const Address & address);
 	Ssd &ssd;
 	FtlParent *ftl;
+	//FtlImpl_Page *ftl;
 };
 
 /* The SSD is the single main object that will be created to simulate a real

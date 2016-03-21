@@ -37,6 +37,7 @@ FtlParent::FtlParent(Controller &controller, Ssd &parent) : controller(controlle
 }
 
 
+
 ssd::ulong FtlParent::get_erases_remaining(const Address &address) const
 {
 	return controller.get_erases_remaining(address);
