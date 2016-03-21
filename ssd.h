@@ -923,6 +923,9 @@ private:
 	Address log_write_address;
 	unsigned int low_watermark;
 
+	unsigned int *ftl_queue_last_bg_event_index;
+	bool *ftl_queue_has_bg_event;
+
 	double bg_events_time;
 	double next_event_time;
 

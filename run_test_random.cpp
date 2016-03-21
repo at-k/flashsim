@@ -116,6 +116,7 @@ int main(int argc, char **argv)
 	{
 		write_complete = false;
 		location = rand()%lastLBA;
+		//location = i%lastLBA;
 		bool result = ssd -> event_arrive(WRITE, location, 1, write_end_time, write_complete, write_end_time);
 		if(result == false)
 		{

@@ -78,9 +78,13 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller, Ssd &parent):FtlParent(contro
 	log_write_address.valid = NONE;
 	low_watermark = MAX_BLOCKS_PER_GC;
 	plane_free_times = (double *)malloc(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * sizeof(double));
+	ftl_queue_last_bg_event_index = (unsigned int *)malloc(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * sizeof(unsigned int));
+	ftl_queue_has_bg_event = (bool *)malloc(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * sizeof(bool));
 	for(unsigned int i=0;i<SSD_SIZE * PACKAGE_SIZE * DIE_SIZE;i++)
 	{
 		plane_free_times[i] = 0;
+		ftl_queue_last_bg_event_index[i] = 0;
+		ftl_queue_has_bg_event[i] = false;
 	}
 	bg_events_time = -1;
 	next_event_time = -1;
@@ -550,6 +554,9 @@ enum status FtlImpl_Page::read(Event &event, bool &op_complete, double &end_time
 			find_location++;
 		stalled_fg_read->predecessor_completed = find_location == ftl_queues[plane_num].begin() ? true : false;
 		ftl_queues[plane_num].insert(find_location, stalled_fg_read);
+		if( ftl_queue_has_bg_event[plane_num] && 
+			std::distance(ftl_queues[plane_num].begin(), find_location) >= ftl_queue_last_bg_event_index[plane_num])
+			ftl_queue_last_bg_event_index[plane_num]++;
 	}
 	else
 	{
@@ -1197,6 +1204,8 @@ double FtlImpl_Page::process_background_tasks(Event &event)
 				perform_first_task = false;
 			if(perform_first_task && !(urgent_cleaning && first_event.type == WRITE ))
 			{
+				//TODO: It might be a better idea to set priority plane only before dispatching the event
+				//from process_ftl_queues, just as removal of priority planes is done from there
 				if(first)
 					ssd.cache.add_priority_plane(plane_num);
 				bool is_erase = false;
@@ -1211,6 +1220,8 @@ double FtlImpl_Page::process_background_tasks(Event &event)
 					stalled_bg_read->child = NULL;
 					stalled_bg_read->parent_completed = true;
 					stalled_bg_read->predecessor_completed = ftl_queues[candidate_plane].size() == 0 ? true : false;
+					ftl_queue_has_bg_event[plane_num] = true;
+					ftl_queue_last_bg_event_index[plane_num] = ftl_queues[plane_num].size();
 					ftl_queues[plane_num].push_back(stalled_bg_read);
 					last_plane_num = plane_num;
 				}
@@ -1242,6 +1253,8 @@ double FtlImpl_Page::process_background_tasks(Event &event)
 					}
 					urgent_bg_write->child = NULL;
 					urgent_bg_write->write_from_address = logical_page_list[first_event.logical_address].physical_address;
+					ftl_queue_has_bg_event[plane_num] = true;
+					ftl_queue_last_bg_event_index[plane_num] = ftl_queues[plane_num].size();
 					ftl_queues[log_write_plane].push_back(urgent_bg_write);
 					last_plane_num = log_write_plane;
 
@@ -1263,6 +1276,8 @@ double FtlImpl_Page::process_background_tasks(Event &event)
 
 
 					urgent_bg_erase->child = NULL;
+					ftl_queue_has_bg_event[plane_num] = true;
+					ftl_queue_last_bg_event_index[plane_num] = ftl_queues[plane_num].size();
 					ftl_queues[plane_num].push_back(urgent_bg_erase);
 					struct ssd_block block_to_clean = bg_cleaning_blocks[plane_num].front();
 					block_to_clean.last_page_written = 0;
@@ -1284,7 +1299,9 @@ double FtlImpl_Page::process_background_tasks(Event &event)
 					if(free_block_list.size() >= low_watermark)
 						urgent_cleaning = false;
 				}
-				
+				printf("[FTL] erasing on plane %d at time %f for address ", plane_num, first_event.start_time);
+				first_event.physical_address.print();
+				printf("\n");
 
 				move_required_pointers(plane_num, 0, 1);
 			}
@@ -1295,10 +1312,13 @@ double FtlImpl_Page::process_background_tasks(Event &event)
 		{
 			ret_time = background_events[plane_num].front().start_time;
 		}
+		/*
 		else if(background_events[plane_num].size() == 0)
 		{
+			printf("[FTL] Removing priority plane %d\n", plane_num);
 			ssd.cache.remove_priority_plane(plane_num);
 		}
+		*/
 	}
 	if(urgent_cleaning)
 	{
@@ -1397,6 +1417,8 @@ void FtlImpl_Page::queue_required_bg_events(Event &event)
 	//while(cur_plane_bg_events.size() > 0 && urgent_cleaning)
 	while(background_events[plane_num].size() > 0 && urgent_cleaning)
 	{
+		//TODO: It might be a better idea to set priority plane only before dispatching the event
+		//from process_ftl_queues, just as removal of priority planes is done from there
 		if(first)
 			ssd.cache.add_priority_plane(plane_num);
 		//struct ftl_event first_event = cur_plane_bg_events.front();
@@ -1429,6 +1451,8 @@ void FtlImpl_Page::queue_required_bg_events(Event &event)
 			urgent_bg_read->parent_completed = true;
 			urgent_bg_read->predecessor_completed = ftl_queues[plane_num].size() == 0 ? true : false;
 			urgent_bg_read->child = NULL;
+			ftl_queue_has_bg_event[plane_num] = true;
+			ftl_queue_last_bg_event_index[plane_num] = ftl_queues[plane_num].size();
 			ftl_queues[plane_num].push_back(urgent_bg_read);
 			last_plane_num = plane_num;
 		}
@@ -1460,6 +1484,8 @@ void FtlImpl_Page::queue_required_bg_events(Event &event)
 			}
 			urgent_bg_write->child = NULL;
 			urgent_bg_write->write_from_address = logical_page_list[first_event.logical_address].physical_address;
+			ftl_queue_has_bg_event[plane_num] = true;
+			ftl_queue_last_bg_event_index[plane_num] = ftl_queues[plane_num].size();
 			ftl_queues[log_write_plane].push_back(urgent_bg_write);
 			last_plane_num = log_write_plane;
 			write_locations.push_back(std::pair<unsigned int, unsigned int>(log_write_plane, ftl_queues[log_write_plane].size() -1));
@@ -1484,6 +1510,8 @@ void FtlImpl_Page::queue_required_bg_events(Event &event)
 				}
 			}
 			urgent_bg_erase->child = NULL;
+			ftl_queue_has_bg_event[plane_num] = true;
+			ftl_queue_last_bg_event_index[plane_num] = ftl_queues[plane_num].size();
 			ftl_queues[plane_num].push_back(urgent_bg_erase);
 			struct ssd_block block_to_clean = bg_cleaning_blocks[plane_num].front();
 			block_to_clean.last_page_written = 0;
@@ -1497,6 +1525,9 @@ void FtlImpl_Page::queue_required_bg_events(Event &event)
 			required_bg_events[plane_num].erase(required_bg_events[plane_num].begin());
 			is_erase = true;
 			last_plane_num = plane_num;
+			printf("[FTL] erasing on plane %d at time %f for address ", plane_num, first_event.start_time);
+			first_event.physical_address.print();
+			printf("\n");
 		}
 	
 		//cur_plane_bg_events.erase(cur_plane_bg_events.begin());
@@ -1511,8 +1542,13 @@ void FtlImpl_Page::queue_required_bg_events(Event &event)
 		}
 		first = false;
 	}
+	/*
 	if(background_events[plane_num].size() == 0)
+	{
+		printf("[FTL] removing priority plane %d\n", plane_num);
 		ssd.cache.remove_priority_plane(plane_num);
+	}
+	*/
 }
 
 
@@ -1568,6 +1604,9 @@ double FtlImpl_Page::process_ftl_queues(Event &event)
 							first_pointer->event.start_time =time;
 
 			}
+			if(ftl_queue_has_bg_event[plane_num] && ftl_queue_last_bg_event_index[plane_num] == 0 
+					&& first_pointer->event.process == FOREGROUND)
+				ftl_queue_has_bg_event[plane_num] = false;
 			while(	first_pointer && 
 					process_worthy && 
 					first_pointer->event.start_time <= time &&
@@ -1616,6 +1655,14 @@ double FtlImpl_Page::process_ftl_queues(Event &event)
 						next_event_time = write_(e);
 						first_event.end_time = next_event_time;
 					}
+					//TODO: Right now, this is checking that there are absolutely no background events
+					//A possibly better way would be to check that this round of GC has ended, i.e. the last 
+					//erase in this round has ended (there might be events from a new round queued up
+					//This would require setting a flag to indicate the same in process_background_tasks
+					if((first_event.type == READ || first_event.type == WRITE) && !ftl_queue_has_bg_event[plane_num] && background_events[plane_num].size() == 0)
+					{
+						ssd.cache.remove_priority_plane(plane_num);
+					}
 				}
 				if(first_event.op_complete_pointer)
 				{
@@ -1637,6 +1684,8 @@ double FtlImpl_Page::process_ftl_queues(Event &event)
 				}
 
 				ftl_queues[plane_num].erase(ftl_queues[plane_num].begin());
+				if(ftl_queue_has_bg_event[plane_num])
+					ftl_queue_last_bg_event_index[plane_num]--;
 				if(ftl_queues[plane_num].size() > 0)
 				{
 					first_pointer = *(ftl_queues[plane_num].begin());

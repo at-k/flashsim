@@ -532,7 +532,7 @@ void Plane::serialize_access(double start_time, double duration, Event &event)
 		}
 	}
 
-	/*
+	
 	if(event.get_event_type() == READ)
 	{
 		printf("Waits on plane for reading %d of duration %f\n", event.get_logical_address(), duration);
@@ -563,7 +563,27 @@ void Plane::serialize_access(double start_time, double duration, Event &event)
 		printf("====\n");
 	}
 	
-	*/
+	printf("Type: ");
+	switch(it->type)
+	{
+		case READ:
+			printf("READ ");
+			break;
+		case WRITE:
+			printf("WRITE ");
+			break;
+		case ERASE:
+			printf("ERASE ");
+			break;
+		default:
+			printf("UNKNOWN ");
+			break;
+	}
+	printf(" scheduled at %f for address ", sched_time);
+	Address event_addr = event.get_address();
+	event_addr.print();
+	printf("\n");
+	
 	
 	/* write scheduling info in free table slot */
 	lock_times lt;
