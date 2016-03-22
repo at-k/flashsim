@@ -59,7 +59,7 @@ FtlImpl_Fast::FtlImpl_Fast(Controller &controller, Ssd &parent):
 	printf("Using FAST FTL.\n");
 }
 
-FtlImpl_Fast::~FtlImpl_Fast(void)
+FtlImpl_Fast::~FtlImpl_Fast()
 {
 	delete data_list;
 	delete log_pages;

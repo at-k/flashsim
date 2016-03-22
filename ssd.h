@@ -789,7 +789,7 @@ class FtlParent
 public:
 	FtlParent(Controller &controller, Ssd &parent);
 
-	virtual ~FtlParent () = 0;
+	virtual ~FtlParent () {};
 	virtual enum status read(Event &event, bool &op_complete, double &end_time) = 0;
 	virtual enum status write(Event &event, bool &op_complete, double &end_time) = 0;
 	virtual enum status noop(Event &event, bool &op_complete, double &end_time) = 0;

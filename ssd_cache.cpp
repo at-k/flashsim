@@ -48,7 +48,8 @@ void Cache::place_in_cache(Event &event)
  	{
 		if(logical_address_map.size() >= size)
 		{
-			for(unsigned int i=0;i<size;i++)
+			unsigned int i;
+			for(i=0;i<size;i++)
 			{
 				if(!cached_pages[i].evict_priority)
 				{
@@ -72,6 +73,7 @@ void Cache::place_in_cache(Event &event)
 					}
 				}
 			}
+			printf("%d %d\n", i, size);
 			cached_pages[evict_index].physical_address.valid = NONE;
 			//printf("Removing %d from the map again priority was %d\n", cached_pages[evict_index].logical_address, cached_pages[evict_index].evict_priority);
 			logical_address_map.erase(cached_pages[evict_index].logical_address);
