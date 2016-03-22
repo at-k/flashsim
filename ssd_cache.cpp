@@ -3,6 +3,17 @@
 
 using namespace ssd;
 
+
+bool CompareCacheEntries::operator()(const std::pair<bool, double> &a, const std::pair<bool, double> &b)
+{
+	if(!a.first && b.first)
+		return true;
+	else if (a.first && !b.first)
+		return false;
+	else
+		return a.second < b.second;
+}
+
 Cache::Cache()
 {
 	size = CACHE_SIZE;
@@ -11,6 +22,19 @@ Cache::Cache()
 	{
 		cached_pages[i].physical_address.valid = NONE;
 	}
+
+}
+
+Cache::Cache(const Cache &c)
+{
+	printf("copy constructor called\n");
+	fflush(stdout);
+}
+
+Cache & Cache::operator=(const Cache &c)
+{
+	printf("operator = called\n");
+	fflush(stdout);
 }
 
 Cache::~Cache()
@@ -40,14 +64,29 @@ void Cache::place_in_cache(Event &event)
 	unsigned int evict_index = size;
 	bool target_plane_chosen = false;
 	unsigned int target_plane_index = 0;
+	printf("%d %d\n", logical_address_map.size(), eviction_map.size());
+	assert(logical_address_map.size() == eviction_map.size());
 	if(iter != logical_address_map.end())
  	{
 		evict_index = iter->second;
+		std::pair<bool, double> cur_key(cached_pages[evict_index].evict_priority, cached_pages[evict_index].time);
+		std::map<std::pair<bool, double>, unsigned int, CompareCacheEntries>::iterator iter;
+		std::pair<	std::map <std::pair<bool, double>, unsigned int>::iterator, 
+					std::map <std::pair<bool, double>, unsigned int>::iterator
+				 > possible_entries = eviction_map.equal_range(cur_key); 
+		for(iter = possible_entries.first; iter != possible_entries.second; iter++)
+		{
+			if(iter->second == evict_index)
+				break;
+		}
+		assert(iter != possible_entries.second);
+		eviction_map.erase(iter);
  	}
 	else
  	{
-		if(logical_address_map.size() >= size)
+		if(logical_address_map.size() == size)
 		{
+			/*
 			unsigned int i;
 			for(i=0;i<size;i++)
 			{
@@ -73,13 +112,31 @@ void Cache::place_in_cache(Event &event)
 					}
 				}
 			}
-			printf("%d %d\n", i, size);
-			cached_pages[evict_index].physical_address.valid = NONE;
+			*/
+			evict_index = eviction_map.begin()->second;
+			//printf("%d %d\n", i, size);
+			//cached_pages[evict_index].physical_address.valid = NONE;
 			//printf("Removing %d from the map again priority was %d\n", cached_pages[evict_index].logical_address, cached_pages[evict_index].evict_priority);
 			logical_address_map.erase(cached_pages[evict_index].logical_address);
+			//eviction_map.erase(std::pair<bool, double>(cached_pages[evict_index].evict_priority, cached_pages[evict_index].time));
+			std::pair<bool, double> cur_key(cached_pages[evict_index].evict_priority, cached_pages[evict_index].time);
+			std::map<std::pair<bool, double>, unsigned int, CompareCacheEntries>::iterator iter;
+			std::pair<	std::map <std::pair<bool, double>, unsigned int>::iterator, 
+						std::map <std::pair<bool, double>, unsigned int>::iterator
+					 > possible_entries = eviction_map.equal_range(cur_key); 
+			for(iter = possible_entries.first; iter != possible_entries.second; iter++)
+			{
+				if(iter->second == evict_index)
+					break;
+			}
+			assert(iter != possible_entries.second);
+			eviction_map.erase(iter);
+			printf("Evicting %d %f %d\n", cached_pages[evict_index].evict_priority, cached_pages[evict_index].time, cached_pages[evict_index].logical_address);
+			printf("%d %d\n", logical_address_map.size(), eviction_map.size());
 		}
 		else
 		{
+			//TODO: this can be made faster by maintaining a pointer to the last empty index
 			for(unsigned int i=0;i<size;i++)
 			{
 				if(cached_pages[i].physical_address.valid == NONE)
@@ -112,7 +169,10 @@ void Cache::place_in_cache(Event &event)
 	unsigned int plane_num = cache_entry_address.package*PACKAGE_SIZE*DIE_SIZE + cache_entry_address.die*DIE_SIZE + cache_entry_address.plane;
 	cached_pages[evict_index].evict_priority = (std::find(priority_planes.begin(), priority_planes.end(), plane_num) != priority_planes.end());
 	logical_address_map[logical_add] = evict_index;
+	eviction_map.insert(std::pair<std::pair<bool, double>, unsigned int>(std::pair<bool, double>(cached_pages[evict_index].evict_priority, cached_pages[evict_index].time), evict_index));
 	
+	printf("%d %d\n", logical_address_map.size(), eviction_map.size());
+
 	//printf("Adding %d %f %d ", cached_pages[evict_index].logical_address, cached_pages[evict_index].time, cached_pages[evict_index].evict_priority);
 	//cached_pages[evict_index].physical_address.print();
 	//printf(" %d\n", plane_num);
@@ -142,8 +202,23 @@ bool Cache::remove_priority_plane(unsigned int plane_num)
 		unsigned int cache_entry_plane = cache_entry_address.package*PACKAGE_SIZE*DIE_SIZE + cache_entry_address.die*DIE_SIZE + cache_entry_address.plane;
 		if(cache_entry_plane == plane_num)
 		{
+			std::pair<bool, double> cur_key(cached_pages[i].evict_priority, cached_pages[i].time);
+			std::map<std::pair<bool, double>, unsigned int, CompareCacheEntries>::iterator iter;
+			std::pair<	std::map <std::pair<bool, double>, unsigned int>::iterator, 
+						std::map <std::pair<bool, double>, unsigned int>::iterator
+					 > possible_entries = eviction_map.equal_range(cur_key); 
+			for(iter = possible_entries.first; iter != possible_entries.second; iter++)
+			{
+				if(iter->second == i)
+					break;
+
+			}
+			assert(iter != possible_entries.second);
 			cached_pages[i].evict_priority = false;
+			eviction_map.erase(iter);
+			std::pair<bool, double> new_key(cached_pages[i].evict_priority, cached_pages[i].time);
+			eviction_map.insert(std::pair<std::pair<bool, double>, unsigned int>(new_key, i));
 		}
 	}
 	return true;
-}
+}	

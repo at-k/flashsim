@@ -157,6 +157,9 @@ extern const uint MAX_BLOCKS_PER_GC;
 
 /* Minimum blocks to clean in one call the GC */
 extern const uint MIN_BLOCKS_PER_GC;
+
+/* Cache eviction policy 0->LRU, 1->LRU + Plane Priority */
+extern const uint CACHE_EVICTION_POLICY;
 /*
  * LOG page limit for FAST.
  */
@@ -876,11 +879,19 @@ struct cache_entry
 	bool evict_priority;
 };
 
+class CompareCacheEntries
+{
+public:
+	bool operator()(const std::pair<bool, double> &a, const std::pair<bool, double> &b);
+};
+
 class Cache
 {
 public:
 	Cache();
 	~Cache();
+	Cache(const Cache &c);
+	Cache & operator=(const Cache &c);
 	bool present_in_cache(Event &event);
 	void place_in_cache(Event &event);
 	bool add_priority_plane(unsigned int plane_num);
@@ -888,6 +899,7 @@ public:
 private:
 	unsigned int size;
 	std::unordered_map<unsigned int, unsigned int> logical_address_map; 
+	std::multimap<std::pair<bool, double>, unsigned int, CompareCacheEntries> eviction_map;
 	std::vector<unsigned int> priority_planes;
 	struct cache_entry *cached_pages;
 };

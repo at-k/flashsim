@@ -1208,8 +1208,8 @@ double FtlImpl_Page::process_background_tasks(Event &event)
 			{
 				//TODO: It might be a better idea to set priority plane only before dispatching the event
 				//from process_ftl_queues, just as removal of priority planes is done from there
-				//if(first)
-				//	ssd.cache.add_priority_plane(plane_num);
+				if(first)
+					ssd.cache.add_priority_plane(plane_num);
 				bool is_erase = false;
 				if(first_event.type == READ)
 				{
@@ -1417,8 +1417,8 @@ void FtlImpl_Page::queue_required_bg_events(Event &event)
 	{
 		//TODO: It might be a better idea to set priority plane only before dispatching the event
 		//from process_ftl_queues, just as removal of priority planes is done from there
-		//if(first)
-		//	ssd.cache.add_priority_plane(plane_num);
+		if(first)
+			ssd.cache.add_priority_plane(plane_num);
 		//struct ftl_event first_event = cur_plane_bg_events.front();
 		struct ftl_event first_event = background_events[plane_num].front();
 		first_event.start_time = time;
@@ -1653,10 +1653,10 @@ double FtlImpl_Page::process_ftl_queues(Event &event)
 					//A possibly better way would be to check that this round of GC has ended, i.e. the last 
 					//erase in this round has ended (there might be events from a new round queued up
 					//This would require setting a flag to indicate the same in process_background_tasks
-					//if((first_event.type == READ || first_event.type == WRITE) && !ftl_queue_has_bg_event[plane_num] && background_events[plane_num].size() == 0)
-					//{
-					//	ssd.cache.remove_priority_plane(plane_num);
-					//}
+					if((first_event.type == READ || first_event.type == WRITE) && !ftl_queue_has_bg_event[plane_num] && background_events[plane_num].size() == 0)
+					{
+						ssd.cache.remove_priority_plane(plane_num);
+					}
 				}
 				if(first_event.op_complete_pointer)
 				{

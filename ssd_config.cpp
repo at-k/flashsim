@@ -148,6 +148,11 @@ uint GC_SCHEME = 0;
 uint MAX_GC_BLOCKS = 0;
 
 /*
+ * Cache eviction policy 0->LRU 1->LRU+Plane Priority 
+ */
+uint CACHE_EVICTION_POLICY = 0;
+
+/*
  * Maximum planes that can be undergoing cleaning in parallel (0 means no limit)
  */
 uint MAX_GC_PLANES = 0;
@@ -274,6 +279,8 @@ void load_entry(char *name, double value, uint line_number) {
 		MAX_BLOCKS_PER_GC = value;
 	else if (!strcmp(name, "MIN_BLOCKS_PER_GC"))
 		MIN_BLOCKS_PER_GC = value;
+	else if (!strcmp(name, "CACHE_EVICTION_POLICY"))
+		CACHE_EVICTION_POLICY = value;
 	else
 		fprintf(stderr, "Config file parsing error on line %u\n", line_number);
 	return;
@@ -352,6 +359,7 @@ void print_config(FILE *stream) {
 	fprintf(stream, "MIN_BLOCKS_PER_GC: %d\n", MIN_BLOCKS_PER_GC);
 	fprintf(stream, "MAX_BLOCKS_PER_GC: %d\n", MAX_BLOCKS_PER_GC);
 	fprintf(stream, "CACHE_SIZE: %i\n", CACHE_SIZE);
+	fprintf(stream, "CACHE_EVICTION_POLICY: %i\n", CACHE_EVICTION_POLICY);
 	fprintf(stream, "PARALLELISM_MODE: %i\n", PARALLELISM_MODE);
 	fprintf(stream, "RAID_NUMBER_OF_PHYSICAL_SSDS: %i\n", RAID_NUMBER_OF_PHYSICAL_SSDS);
 
