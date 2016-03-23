@@ -6,12 +6,14 @@ using namespace ssd;
 
 bool CompareCacheEntries::operator()(const std::pair<bool, double> &a, const std::pair<bool, double> &b)
 {
-	if(!a.first && b.first)
-		return true;
-	else if (a.first && !b.first)
-		return false;
-	else
-		return a.second < b.second;
+	if(CACHE_EVICTION_POLICY == 1)
+	{
+		if(!a.first && b.first)
+			return true;
+		else if (a.first && !b.first)
+			return false;
+	}
+	return a.second < b.second;
 }
 
 Cache::Cache()
