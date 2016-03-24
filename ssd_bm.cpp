@@ -29,8 +29,6 @@ Block_manager::Block_manager(FtlParent *ftl) : ftl(ftl)
 	max_blocks = NUMBER_OF_ADDRESSABLE_BLOCKS;
 	max_log_blocks = max_blocks;
 
-	printf("[PRINT] Number of addressable blocks %d %d\n", NUMBER_OF_ADDRESSABLE_BLOCKS, SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * PLANE_SIZE);
-
 	if (FTL_IMPLEMENTATION == IMPL_FAST)
 		max_log_blocks = FAST_LOG_PAGE_LIMIT;
 

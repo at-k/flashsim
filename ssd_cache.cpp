@@ -66,7 +66,6 @@ void Cache::place_in_cache(Event &event)
 	unsigned int evict_index = size;
 	bool target_plane_chosen = false;
 	unsigned int target_plane_index = 0;
-	printf("%d %d\n", logical_address_map.size(), eviction_map.size());
 	assert(logical_address_map.size() == eviction_map.size());
 	if(iter != logical_address_map.end())
  	{
@@ -133,8 +132,8 @@ void Cache::place_in_cache(Event &event)
 			}
 			assert(iter != possible_entries.second);
 			eviction_map.erase(iter);
-			printf("Evicting %d %f %d\n", cached_pages[evict_index].evict_priority, cached_pages[evict_index].time, cached_pages[evict_index].logical_address);
-			printf("%d %d\n", logical_address_map.size(), eviction_map.size());
+			//printf("Evicting %d %f %d\n", cached_pages[evict_index].evict_priority, cached_pages[evict_index].time, cached_pages[evict_index].logical_address);
+			//printf("%d %d\n", logical_address_map.size(), eviction_map.size());
 		}
 		else
 		{
@@ -173,7 +172,7 @@ void Cache::place_in_cache(Event &event)
 	logical_address_map[logical_add] = evict_index;
 	eviction_map.insert(std::pair<std::pair<bool, double>, unsigned int>(std::pair<bool, double>(cached_pages[evict_index].evict_priority, cached_pages[evict_index].time), evict_index));
 	
-	printf("%d %d\n", logical_address_map.size(), eviction_map.size());
+	//printf("%d %d\n", logical_address_map.size(), eviction_map.size());
 
 	//printf("Adding %d %f %d ", cached_pages[evict_index].logical_address, cached_pages[evict_index].time, cached_pages[evict_index].evict_priority);
 	//cached_pages[evict_index].physical_address.print();

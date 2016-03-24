@@ -34,7 +34,7 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller, Ssd &parent):FtlParent(contro
 	gc_required(false),
 	RAW_SSD_BLOCKS(SSD_SIZE*PACKAGE_SIZE*DIE_SIZE*PLANE_SIZE),
 	ADDRESSABLE_SSD_PAGES(NUMBER_OF_ADDRESSABLE_BLOCKS * BLOCK_SIZE),
-	clean_threshold((SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * PLANE_SIZE) - NUMBER_OF_ADDRESSABLE_BLOCKS),
+	clean_threshold(((SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * PLANE_SIZE) - NUMBER_OF_ADDRESSABLE_BLOCKS)/2),
 //	low_watermark(GC_SCHEME == 0 ? 1 : 25),
 	READ_PREFERENCE(true),
 	//open_events(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE), 
@@ -43,13 +43,20 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller, Ssd &parent):FtlParent(contro
 	bg_cleaning_blocks(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE), 
 	required_bg_events(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE)
 {
+	printf("%d %d\n", ADDRESSABLE_SSD_PAGES, sizeof(struct logical_page));
 	logical_page_list = (struct logical_page *)malloc(ADDRESSABLE_SSD_PAGES * sizeof (struct logical_page));
+	printf("ADDR %d\n", ADDRESSABLE_SSD_PAGES);
 	for (unsigned int i=0;i<ADDRESSABLE_SSD_PAGES;i++)
 	{
 		logical_page_list[i].physical_address.valid = NONE;
 		logical_page_list[i].write_time = -1;
 	}
 
+	unsigned int logical_page_list_index = 0;
+
+	allocated_block_list.clear();
+	free_block_list.clear();
+	filled_block_list.clear();
 	unsigned int next_block_lba = 0;
 	for(unsigned int i=0;i<RAW_SSD_BLOCKS;i++)
 	{
@@ -68,13 +75,32 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller, Ssd &parent):FtlParent(contro
 		}
 		new_ssd_block.last_page_written = 0;
 		new_ssd_block.scheduled_for_erasing = false;
-		free_block_list.push_back(new_ssd_block);
+		Address new_physical_address = new_ssd_block.physical_address;
+		new_physical_address.valid = PAGE;
+		if(next_block_lba < ADDRESSABLE_SSD_PAGES)
+		{
+			for(unsigned int j=0;j<BLOCK_SIZE;j++)
+			{
+				if(next_block_lba + j >= ADDRESSABLE_SSD_PAGES)
+					break;
+				new_physical_address.page = j;
+				logical_page_list[next_block_lba + j].physical_address = new_physical_address;
+				new_ssd_block.page_mapping[j] = next_block_lba + j;
+			}
+			new_ssd_block.valid_page_count = BLOCK_SIZE;
+			new_ssd_block.last_page_written = BLOCK_SIZE - 1;
+			filled_block_list.push_back(new_ssd_block);
+		}
+		else
+		{
+			free_block_list.push_back(new_ssd_block);
+		}
+
 		next_block_lba = get_next_block_lba(next_block_lba);
 		if(next_block_lba == 0)
 			break;
 	}
-	allocated_block_list.clear();
-	filled_block_list.clear();
+	printf("%d %d\n", RAW_SSD_BLOCKS, sizeof(struct ssd_block));
 	log_write_address.valid = NONE;
 	low_watermark = MAX_BLOCKS_PER_GC;
 	plane_free_times = (double *)malloc(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * sizeof(double));
@@ -584,6 +610,7 @@ enum status FtlImpl_Page::noop(Event &event, bool &op_complete, double &end_time
 	double e_time = std::numeric_limits<double>::max();
 	next_event_time = process_ftl_queues(event);
 	bg_events_time = process_background_tasks(event);
+	next_event_time = process_ftl_queues(event);
 	e_time = next_event_time < e_time ? next_event_time : e_time;
 	event.incr_time_taken(e_time - event.get_start_time());
 	end_time = e_time;
