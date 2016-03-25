@@ -13,7 +13,7 @@ def main():
 	end_time = -1
 	for line in file:
 		req_time = float(line.split('\t')[0].strip())
-		time = float(line.split('\t')[2][:-1].strip())
+		time = float(line.split('\t')[2].strip())
 		if req_time < start_time or start_time == -1:
 			start_time = req_time
 		if time > end_time or end_time == -1:
