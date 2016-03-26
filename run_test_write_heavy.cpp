@@ -41,14 +41,9 @@ enum op_type{OP_READ, OP_WRITE};
 
 int main(int argc, char **argv)
 {
-	char read_file_name[100] = "";
 	char write_file_name[100] = "";
-	std::set<unsigned int> addresses;
 	FILE *write_file;
-	double initial_delay;
-	//unsigned int req_per_thread = 1000;
-	
-	unsigned int total_read_count = 100000, cur_read_count = 0;
+	double initial_delay = 0;
 
 
 	load_config();
@@ -56,12 +51,12 @@ int main(int argc, char **argv)
 	printf("\n");
 
 	Ssd *ssd = new Ssd();
-	srand(time(NULL));
+	srand(10101);
 
-	unsigned int util_percent = atoi(argv[1]);
+	unsigned int util_percent = 100;
 	unsigned int num_rounds = 100;
-	unsigned int burst_write_gap = 100;
-	unsigned int non_burst_write_gap = 10000;
+	unsigned int burst_write_gap = 10;
+	unsigned int non_burst_write_gap = 10;
 	unsigned int burst_writes_per_round = 1000;
 	unsigned int non_burst_writes_per_round = 10;
 
@@ -72,6 +67,7 @@ int main(int argc, char **argv)
 	printf("addressable blocks %d\n", NUMBER_OF_ADDRESSABLE_BLOCKS);
 	unsigned int lastLBA = NUMBER_OF_ADDRESSABLE_BLOCKS * BLOCK_SIZE;
 
+	printf("lastLBA %d\n", lastLBA);
 
 
 	strcat(write_file_name, "_burst_write_");
@@ -84,16 +80,14 @@ int main(int argc, char **argv)
 	write_file = fopen(write_file_name, "w");
 
 	bool noop_complete = false;
-	double next_noop_time = 0;
 	double prev_noop_time = 0;
 
-	bool write_complete = false;
-	double write_end_time = 0;
 
-	unsigned int occupied = util_percent*lastLBA/100;
-	unsigned int i=0;
 	unsigned int location = 0;
 	/*
+	unsigned int occupied = util_percent*lastLBA/100;
+	bool write_complete = false;
+	double write_end_time = 0;
 	for (i = 0; i < occupied; i++)
 	{
 		write_complete = false;
@@ -116,8 +110,8 @@ int main(int argc, char **argv)
 		}
 		addresses.insert(location);
 	}
-	*/
 	initial_delay = write_end_time;
+	*/
 	printf("Completed\n");
 	fflush(stdout);
 
@@ -136,6 +130,9 @@ int main(int argc, char **argv)
 	double *end_time = (double *)malloc(total_writes * sizeof(double));
 	if(!end_time)
 		printf("end time failed\n");
+	unsigned int *addresses = (unsigned int *)malloc(total_writes * sizeof(unsigned int));
+	if(!addresses)
+		printf("end time failed\n");
 	
 	double time = initial_delay;
 	for(unsigned int i=0;i<total_writes;i++)
@@ -147,36 +144,76 @@ int main(int argc, char **argv)
 
 	unsigned int cur_write_num = 0;
 	//location = 0;
+	bool complete = false;
 	for(unsigned int i=0;i<num_rounds;i++)
 	{
-		for(unsigned int j=0;j<burst_writes_per_round;j++)
+		if(!complete)
 		{
-			
-			location = rand()%lastLBA;
-			time = time + burst_write_gap;
-			start_time[cur_write_num] = time;
-			bool result = ssd->event_arrive(WRITE, location, 1, start_time[cur_write_num], op_complete[cur_write_num], end_time[cur_write_num]);
-			if(!result)
+			for(unsigned int j=0;j<burst_writes_per_round;j++)
 			{
-				printf("write %d failed\n", cur_write_num);
-				break;
+				printf("cur write num %d %d %d \n", cur_write_num, lastLBA, cur_write_num >= lastLBA);	
+				location = rand()%lastLBA;
+				time = time + burst_write_gap;
+				start_time[cur_write_num] = time;
+				addresses[cur_write_num] = location;
+				bool result = ssd->event_arrive(WRITE, location, 1, start_time[cur_write_num], op_complete[cur_write_num], end_time[cur_write_num]);
+				if(!result)
+				{
+					printf("here write %d failed\n", cur_write_num);
+					fflush(stdout);
+					complete = true;	
+					break;
+				}
+				cur_write_num++;
 			}
-			
-			cur_write_num++;
 		}
-		for(unsigned int j=0;j<non_burst_writes_per_round;j++)
+		if(!complete)
 		{
-			location = rand()%lastLBA;
-			time = time + non_burst_write_gap;
-			start_time[cur_write_num] = time;
-			bool result = ssd->event_arrive(WRITE, location, 1, start_time[cur_write_num], op_complete[cur_write_num], end_time[cur_write_num]);
-			if(!result)
+			for(unsigned int j=0;j<non_burst_writes_per_round;j++)
 			{
-				printf("write %d failed\n", cur_write_num);
-				break;
+				printf("cur write num %d %d %d \n", cur_write_num, lastLBA, cur_write_num >= lastLBA);	
+				location = rand()%lastLBA;
+				time = time + non_burst_write_gap;
+				start_time[cur_write_num] = time;
+				addresses[cur_write_num] = location;
+				bool result = ssd->event_arrive(WRITE, location, 1, start_time[cur_write_num], op_complete[cur_write_num], end_time[cur_write_num]);
+				if(!result)
+				{
+					printf("here write %d failed\n", cur_write_num);
+					fflush(stdout);
+					complete = true;
+					break;
+				}
+				cur_write_num++;
 			}
-			cur_write_num++;
 		}
+		if(complete)
+		{
+			printf("SSD saturated, need to wait for some time\n");
+			bool all_ops_finished = true;
+			while(time < std::numeric_limits<double>::max())
+			{
+				all_ops_finished = true;
+				for(unsigned int j=0;j<cur_write_num;j++)
+				{
+					if(!op_complete[j])
+					{
+						all_ops_finished = false;
+						break;
+					}
+				}
+				//if(all_ops_finished)
+				//	break;
+				prev_noop_time = time;
+				ssd->event_arrive(NOOP, 0, 1, prev_noop_time, noop_complete, time);
+			}
+			time = prev_noop_time;
+			complete = false;
+			//i--;
+		}
+		printf("cur_write_num %d\n", cur_write_num);
+		if(cur_write_num >= total_writes)
+			break;
 	}
 
 
@@ -194,10 +231,10 @@ int main(int argc, char **argv)
 	{
 		if(!op_complete[i])		
 		{
-			printf("Event %d not complete\n", i);
+			//printf("Event %d not complete\n", i);
 			continue;
 		}
-		fprintf(write_file, "%.5lf\t%.5lf\t%.5lf\n", start_time[i], end_time[i] - start_time[i], end_time[i]);
+		fprintf(write_file, "%.5lf\t%.5lf\t%.5lf\t%u\n", start_time[i], end_time[i] - start_time[i], end_time[i], addresses[i]);
 	}
 
 	ssd->print_ftl_statistics(stdout);

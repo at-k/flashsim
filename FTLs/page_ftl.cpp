@@ -1211,7 +1211,7 @@ double FtlImpl_Page::process_background_tasks(Event &event)
 				}
 				Event probable_bg_write(WRITE, first_event.logical_address, 1, first_event.start_time);
 				candidate_address = find_write_location(probable_bg_write, log_write_address, &write_address_already_open);
-				if(log_write_address == candidate_address)
+				if(candidate_address.valid == NONE)
 					perform_first_task = false;
 			}
 			std::vector<struct ftl_event>::iterator iter;
@@ -1486,9 +1486,9 @@ void FtlImpl_Page::queue_required_bg_events(Event &event)
 			bool write_address_already_open;
 			Event probable_bg_write(WRITE, first_event.logical_address, 1, first_event.start_time);
 			candidate_address = find_write_location(probable_bg_write, log_write_address, &write_address_already_open);
-			bool increment_ret_val = increment_log_write_address(probable_bg_write, candidate_address, write_address_already_open);
-			if(!increment_ret_val || candidate_address == log_write_address)
+			if(candidate_address.valid == NONE)
 				break;
+			bool increment_ret_val = increment_log_write_address(probable_bg_write, candidate_address, write_address_already_open);
 			first_event.physical_address = log_write_address;
 			if(!mark_reserved(log_write_address, true))
 				assert(false);
@@ -1650,6 +1650,7 @@ double FtlImpl_Page::process_ftl_queues(Event &event)
 					)
 				{
 					//TODO write NOOP
+					//TODO If this is a foreground read, then it must be redirected to a new address
 					requires_processing = false;
 					first_event.end_time = first_event.start_time;
 					next_event_time = first_event.start_time;
