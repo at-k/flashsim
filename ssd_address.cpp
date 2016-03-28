@@ -44,13 +44,24 @@ Address::Address(void):
 
 Address::Address(const Address &address)
 {
-	*this = address;
+	//*this = address;
+	this->package = address.package;
+	this->die = address.die;
+	this->plane = address.plane;
+	this->block = address.block;
+	this->page = address.page;
+	this->valid = address.valid;
 	return;
 }
 
 Address::Address(const Address *address)
 {
-	*this = *address;
+	this->package = address->package;
+	this->die = address->die;
+	this->plane = address->plane;
+	this->block = address->block;
+	this->page = address->page;
+	this->valid = address->valid;
 	return;
 }
 
@@ -191,8 +202,8 @@ Address &Address::operator+=(const uint i)
 
 Address &Address::operator=(const Address &rhs)
 {
-	if(this == &rhs)
-		return *this;
+	//if(this == &rhs)
+	//	return *this;
 	package = rhs.package;
 	die = rhs.die;
 	plane = rhs.plane;

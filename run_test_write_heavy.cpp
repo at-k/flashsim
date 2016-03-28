@@ -151,7 +151,6 @@ int main(int argc, char **argv)
 		{
 			for(unsigned int j=0;j<burst_writes_per_round;j++)
 			{
-				printf("cur write num %d %d %d \n", cur_write_num, lastLBA, cur_write_num >= lastLBA);	
 				location = rand()%lastLBA;
 				time = time + burst_write_gap;
 				start_time[cur_write_num] = time;
@@ -171,7 +170,6 @@ int main(int argc, char **argv)
 		{
 			for(unsigned int j=0;j<non_burst_writes_per_round;j++)
 			{
-				printf("cur write num %d %d %d \n", cur_write_num, lastLBA, cur_write_num >= lastLBA);	
 				location = rand()%lastLBA;
 				time = time + non_burst_write_gap;
 				start_time[cur_write_num] = time;
@@ -211,7 +209,6 @@ int main(int argc, char **argv)
 			complete = false;
 			//i--;
 		}
-		printf("cur_write_num %d\n", cur_write_num);
 		if(cur_write_num >= total_writes)
 			break;
 	}
@@ -222,7 +219,6 @@ int main(int argc, char **argv)
 	while(prev_noop_time < std::numeric_limits<double>::max())
 	{
 		ssd->event_arrive(NOOP, 0, 1, prev_noop_time, noop_complete, prev_noop_time);
-		printf("[App] next noop at %f\n", prev_noop_time);
 	}
 	
 
