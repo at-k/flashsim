@@ -51,7 +51,7 @@ int main(int argc, char **argv)
 	bool write_data;
 	//unsigned int req_per_thread = 1000;
 	
-	unsigned int total_read_count = 100000, cur_read_count = 0;
+	unsigned int total_read_count = 1000, cur_read_count = 0;
 
 
 	load_config();
@@ -267,7 +267,7 @@ int main(int argc, char **argv)
 			write_count++;
 			addresses.insert(op_addresses[earliest_event_index]);
 		}
-
+		prev_noop_time = op_complete_time[earliest_event_index];
 		count[earliest_event_index]++;
 		bool result = false;
 		op_complete[earliest_event_index] = false;
@@ -316,6 +316,11 @@ int main(int argc, char **argv)
 			break;
 		}
 		
+	}
+	while(prev_noop_time < std::numeric_limits<double>::max())
+	{
+		ssd->event_arrive(NOOP, 0, 1, prev_noop_time, noop_complete, prev_noop_time);
+		printf("[App] next noop at %f\n", prev_noop_time);
 	}
 exit:
 	fprintf(stdout, "========================\n");

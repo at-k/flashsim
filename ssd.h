@@ -160,26 +160,17 @@ extern const uint MIN_BLOCKS_PER_GC;
 
 /* Cache eviction policy 0->LRU, 1->LRU + Plane Priority */
 extern const uint CACHE_EVICTION_POLICY;
-/*
- * LOG page limit for FAST.
- */
-extern const uint FAST_LOG_PAGE_LIMIT;
 
-/*
- * Parallelism mode
- */
-extern const uint PARALLELISM_MODE;
-
-/* Virtual block size (as a multiple of the physical block size) */
-extern const uint VIRTUAL_BLOCK_SIZE;
-
-/* Virtual page size (as a multiple of the physical page size) */
-extern const uint VIRTUAL_PAGE_SIZE;
+/* number of pages to write in a block before moving to 
+ * next plane while zeroing out the ssd in ftl init
+ * if set to 0, the ssd is not zeroed out
+ * */
+extern const uint STRIPE_SIZE;
 
 extern const uint NUMBER_OF_ADDRESSABLE_BLOCKS;
 
-/* RAISSDs: Number of physical SSDs */
-extern const uint RAID_NUMBER_OF_PHYSICAL_SSDS;
+enum ftl_implementation {IMPL_PAGE, IMPL_FAST};
+
 
 /*
  * Memory area to support pages with data.
@@ -232,11 +223,6 @@ enum address_valid{NONE, PACKAGE, DIE, PLANE, BLOCK, PAGE};
  * the block types are log, data and map (Directory map usually)
  */
 enum block_type {LOG, DATA};
-
-/*
- * Enumeration of the different FTL implementations.
- */
-enum ftl_implementation {IMPL_PAGE, IMPL_PAGE_PC, IMPL_FAST, IMPL_PAGE_CACHE};
 
 
 #define BOOST_MULTI_INDEX_ENABLE_SAFE_MODE 1
@@ -820,6 +806,7 @@ struct logical_page
 {
 	Address physical_address;
 	double write_time;
+	logical_page():physical_address(), write_time(-1) {}
 };
 
 struct ssd_block
@@ -832,29 +819,101 @@ struct ssd_block
 	bool *reserved_page;
 	unsigned int last_page_written;
 	bool scheduled_for_erasing;
+	ssd_block():physical_address(), page_mapping(NULL), reserved_page(NULL) {}
+	ssd_block(const struct ssd_block &b):physical_address(b.physical_address)
+	{
+		valid_page_count = b.valid_page_count;
+		lifetime_left = b.lifetime_left;
+		last_page_written = b.last_page_written;
+		scheduled_for_erasing = b.scheduled_for_erasing;
+		page_mapping = (unsigned int *)malloc(BLOCK_SIZE*sizeof(unsigned int));
+		reserved_page = (bool *)malloc(BLOCK_SIZE * sizeof(bool));
+		for(unsigned int i=0;i<BLOCK_SIZE;i++)
+		{
+			page_mapping[i] = b.page_mapping[i];
+			reserved_page[i] = b.reserved_page[i];
+		}
+	}
+	struct ssd_block& operator=(const struct ssd_block &b)
+	{
+		physical_address = b.physical_address;
+		valid_page_count = b.valid_page_count;
+		lifetime_left = b.lifetime_left;
+		last_page_written = b.last_page_written;
+		scheduled_for_erasing = b.scheduled_for_erasing;
+		page_mapping = (unsigned int *)malloc(BLOCK_SIZE*sizeof(unsigned int));
+		reserved_page = (bool *)malloc(BLOCK_SIZE * sizeof(bool));
+		for(unsigned int i=0;i<BLOCK_SIZE;i++)
+		{
+			page_mapping[i] = b.page_mapping[i];
+			reserved_page[i] = b.reserved_page[i];
+		}
+		return *this;
+	}
 };
 
 enum ftl_event_process{BACKGROUND, FOREGROUND};
 
 struct ftl_event
 {
-	enum event_type type;
 	Address physical_address;
+	enum event_type type;
 	unsigned int logical_address;
 	double start_time;
 	double end_time;
 	enum ftl_event_process process;
 	bool *op_complete_pointer;
 	double *end_time_pointer;
+	ftl_event():physical_address(), op_complete_pointer(NULL), end_time_pointer(NULL) {}
+	ftl_event(const struct ftl_event &e)//:physical_address(e.physical_address)
+	{
+		physical_address = e.physical_address;
+		type = e.type;
+		logical_address = e.logical_address;
+		start_time = e.start_time;
+		end_time = e.end_time;
+		process = e.process;
+		op_complete_pointer = e.op_complete_pointer;
+		end_time_pointer = e.end_time_pointer;
+	}
+	struct ftl_event& operator=(const struct ftl_event &e)
+	{
+		physical_address = e.physical_address;
+		type = e.type;
+		logical_address = e.logical_address;
+		start_time = e.start_time;
+		end_time = e.end_time;
+		process = e.process;
+		op_complete_pointer = e.op_complete_pointer;
+		end_time_pointer = e.end_time_pointer;
+		return *this;
+	}
 };
 
 struct queued_ftl_event
 {
+	Address write_from_address;
 	struct ftl_event event;
 	bool parent_completed;
 	bool predecessor_completed;
 	struct queued_ftl_event *child;
-	Address write_from_address;
+	queued_ftl_event():write_from_address() {}
+	queued_ftl_event(const struct queued_ftl_event &e):write_from_address(e.write_from_address)
+	{
+		event = e.event;
+		parent_completed = e.parent_completed;
+		predecessor_completed = e.predecessor_completed;
+		child = e.child;
+	}
+	struct queued_ftl_event& operator=(const struct queued_ftl_event &e)
+	{
+		write_from_address = e.write_from_address;
+		event = e.event;
+		parent_completed = e.parent_completed;
+		predecessor_completed = e.predecessor_completed;
+		child = e.child;
+		return *this;
+	}
 };
 
 struct background_cleaning_blocks
@@ -873,10 +932,11 @@ struct required_bg_events_pointer
 
 struct cache_entry
 {
-	unsigned int logical_address;
 	Address physical_address;
+	unsigned int logical_address;
 	double time;
 	bool evict_priority;
+	cache_entry() : physical_address() {}
 };
 
 class CompareCacheEntries
@@ -1000,6 +1060,7 @@ private:
 
 	int addressShift;
 	int addressSize;
+	unsigned int FAST_LOG_PAGE_LIMIT;
 };
 
 

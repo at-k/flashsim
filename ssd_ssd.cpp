@@ -107,8 +107,6 @@ Ssd::Ssd(uint ssd_size):
 		}
 	}
 
-	assert(VIRTUAL_BLOCK_SIZE > 0);
-	assert(VIRTUAL_PAGE_SIZE > 0);
 
 	return;
 }
@@ -142,10 +140,7 @@ bool Ssd::event_arrive(enum event_type type, ulong logical_address, uint size, d
 {
 	assert(start_time >= 0.0);
 
-	if (VIRTUAL_PAGE_SIZE == 1)
-		assert((long long int) logical_address <= (long long int) SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * PLANE_SIZE * BLOCK_SIZE);
-	else
-		assert((long long int) logical_address*VIRTUAL_PAGE_SIZE <= (long long int) SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * PLANE_SIZE * BLOCK_SIZE);
+	assert((long long int) logical_address <= (long long int) SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * PLANE_SIZE * BLOCK_SIZE);
 
 	/* allocate the event and address dynamically so that the allocator can
 	 * handle efficiency issues for us */

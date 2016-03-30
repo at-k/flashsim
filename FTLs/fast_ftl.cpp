@@ -55,6 +55,8 @@ FtlImpl_Fast::FtlImpl_Fast(Controller &controller, Ssd &parent):
 
 	log_pages = NULL;
 
+	FAST_LOG_PAGE_LIMIT = (SSD_SIZE*PACKAGE_SIZE*DIE_SIZE*PLANE_SIZE) - NUMBER_OF_ADDRESSABLE_BLOCKS; 
+
 	printf("Total mapping table size: %luKB\n", NUMBER_OF_ADDRESSABLE_BLOCKS * sizeof(uint) / 1024);
 	printf("Using FAST FTL.\n");
 }

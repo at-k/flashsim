@@ -165,47 +165,21 @@ uint MAX_GC_PLANES = 0;
 uint MAX_BLOCKS_PER_GC = 1;
 uint MIN_BLOCKS_PER_GC = 1;
 
+/* number of pages to write in a block before moving to 
+ * next plane while zeroing out the ssd in ftl init
+ * if set to 0, the ssd is not zeroed out
+ * */
+uint STRIPE_SIZE = 0;
 
-/*
- * Limit of LOG pages (for use in BAST)
- */
-uint BAST_LOG_PAGE_LIMIT = 100;
-
-
-/*
- * Limit of LOG pages (for use in FAST)
- */
-uint FAST_LOG_PAGE_LIMIT = 4;
-
-/*
- * Number of pages allowed to be in DFTL Cached Mapping Table.
- * (Size equals CACHE_BLOCK_LIMIT * block size * page size)
- *
- */
-uint CACHE_DFTL_LIMIT = 8;
 
 uint OVERPROVISIONING = 10;
 
 uint CACHE_SIZE = 0;
 
-/*
- * Parallelism mode.
- * 0 -> Normal
- * 1 -> Striping
- * 2 -> Logical Address Space Parallelism (LASP)
- */
-uint PARALLELISM_MODE = 0;
 
-/* Virtual block size (as a multiple of the physical block size) */
-uint VIRTUAL_BLOCK_SIZE = 1;
-
-/* Virtual page size (as a multiple of the physical page size) */
-uint VIRTUAL_PAGE_SIZE = 1;
 
 uint NUMBER_OF_ADDRESSABLE_BLOCKS = 0;
 
-/* RAISSDs: Number of physical SSDs */
-uint RAID_NUMBER_OF_PHYSICAL_SSDS = 0;
 
 void load_entry(char *name, double value, uint line_number) {
 	/* cheap implementation - go through all possibilities and match entry */
@@ -251,20 +225,6 @@ void load_entry(char *name, double value, uint line_number) {
 		MAP_DIRECTORY_SIZE = value;
 	else if (!strcmp(name, "FTL_IMPLEMENTATION"))
 		FTL_IMPLEMENTATION = value;
-	else if (!strcmp(name, "BAST_LOG_PAGE_LIMIT"))
-		BAST_LOG_PAGE_LIMIT = value;
-	else if (!strcmp(name, "FAST_LOG_PAGE_LIMIT"))
-		FAST_LOG_PAGE_LIMIT = value;
-	else if (!strcmp(name, "CACHE_DFTL_LIMIT"))
-		CACHE_DFTL_LIMIT = value;
-	else if (!strcmp(name, "PARALLELISM_MODE"))
-		PARALLELISM_MODE = value;
-	else if (!strcmp(name, "VIRTUAL_BLOCK_SIZE"))
-		VIRTUAL_BLOCK_SIZE = value;
-	else if (!strcmp(name, "VIRTUAL_PAGE_SIZE"))
-		VIRTUAL_PAGE_SIZE = value;
-	else if (!strcmp(name, "RAID_NUMBER_OF_PHYSICAL_SSDS"))
-		RAID_NUMBER_OF_PHYSICAL_SSDS = value;
 	else if (!strcmp(name, "OVERPROVISIONING"))
 		OVERPROVISIONING = value;
 	else if (!strcmp(name, "CACHE_SIZE"))
@@ -281,6 +241,8 @@ void load_entry(char *name, double value, uint line_number) {
 		MIN_BLOCKS_PER_GC = value;
 	else if (!strcmp(name, "CACHE_EVICTION_POLICY"))
 		CACHE_EVICTION_POLICY = value;
+	else if (!strcmp(name, "STRIPE_SIZE"))
+		STRIPE_SIZE = value;
 	else
 		fprintf(stderr, "Config file parsing error on line %u\n", line_number);
 	return;
@@ -321,12 +283,8 @@ void load_config(void) {
 	fclose(config_file);
 
 
-	NUMBER_OF_ADDRESSABLE_BLOCKS = ((1 - float(OVERPROVISIONING)/100) * (SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * PLANE_SIZE)) / VIRTUAL_PAGE_SIZE;
+	NUMBER_OF_ADDRESSABLE_BLOCKS = ((1 - float(OVERPROVISIONING)/100) * (SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * PLANE_SIZE));
 
-	FAST_LOG_PAGE_LIMIT	=  ((SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * PLANE_SIZE) / VIRTUAL_PAGE_SIZE) - NUMBER_OF_ADDRESSABLE_BLOCKS;
-
-	BAST_LOG_PAGE_LIMIT	= ((SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * PLANE_SIZE) / VIRTUAL_PAGE_SIZE) - NUMBER_OF_ADDRESSABLE_BLOCKS;
-	return;
 }
 
 void print_config(FILE *stream) {
@@ -359,9 +317,8 @@ void print_config(FILE *stream) {
 	fprintf(stream, "MIN_BLOCKS_PER_GC: %d\n", MIN_BLOCKS_PER_GC);
 	fprintf(stream, "MAX_BLOCKS_PER_GC: %d\n", MAX_BLOCKS_PER_GC);
 	fprintf(stream, "CACHE_SIZE: %i\n", CACHE_SIZE);
+	fprintf(stream, "STRIPE_SIZE: %i\n", STRIPE_SIZE);
 	fprintf(stream, "CACHE_EVICTION_POLICY: %i\n", CACHE_EVICTION_POLICY);
-	fprintf(stream, "PARALLELISM_MODE: %i\n", PARALLELISM_MODE);
-	fprintf(stream, "RAID_NUMBER_OF_PHYSICAL_SSDS: %i\n", RAID_NUMBER_OF_PHYSICAL_SSDS);
 
 	return;
 }

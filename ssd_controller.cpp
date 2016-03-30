@@ -154,8 +154,7 @@ enum status Controller::issue(Event &event_list)
 
 void Controller::translate_address(Address &address)
 {
-	if (PARALLELISM_MODE != 1)
-		return;
+	return;
 }
 
 ssd::ulong Controller::get_erases_remaining(const Address &address) const
