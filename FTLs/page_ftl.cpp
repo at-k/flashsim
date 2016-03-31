@@ -90,8 +90,6 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller, Ssd &parent):FtlParent(contro
 		}
 		new_ssd_block.last_page_written = 0;
 		new_ssd_block.scheduled_for_erasing = false;
-		Address new_physical_address = new_ssd_block.physical_address;
-		new_physical_address.valid = PAGE;
 		free_block_list.push_back(new_ssd_block);
 
 		next_block_lba = get_next_block_lba(next_block_lba);
@@ -134,6 +132,8 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller, Ssd &parent):FtlParent(contro
 					break;
 				cur_address.page = j;
 				new_ssd_block.page_mapping[j] = next_lba_to_map;
+				new_ssd_block.last_page_written = j;
+				new_ssd_block.valid_page_count++;
 				logical_page_list[next_lba_to_map].physical_address = cur_address;
 				logical_page_list[next_lba_to_map].write_time = 0;
 				last_lba_mapped[plane_num] = next_lba_to_map;
@@ -147,6 +147,20 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller, Ssd &parent):FtlParent(contro
 					next_lba_to_map = last_lba_mapped[plane_num] - (STRIPE_SIZE - 1) + num_planes*STRIPE_SIZE;
 					stripe_set_remaining[plane_num] = STRIPE_SIZE;
 				}
+			}
+			if(new_ssd_block.valid_page_count > 0)
+			{
+				if(new_ssd_block.last_page_written != BLOCK_SIZE - 1)
+				{
+					allocated_block_list.push_back(new_ssd_block);
+				}
+				else
+				{
+					filled_block_list.push_back(new_ssd_block);
+				}
+				std::list<struct ssd_block>::iterator last_free_block_pointer = free_block_list.end();
+				last_free_block_pointer--;
+				free_block_list.erase(last_free_block_pointer);
 			}
 			plane_encountered_before[plane_num] = true;
 			_effective_plane++;
