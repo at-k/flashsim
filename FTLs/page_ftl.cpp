@@ -649,6 +649,7 @@ enum status FtlImpl_Page::read(Event &event, bool &op_complete, double &end_time
 		if( ftl_queue_has_bg_event[plane_num] && 
 			std::distance(ftl_queues[plane_num].begin(), find_location) >= ftl_queue_last_bg_event_index[plane_num])
 			ftl_queue_last_bg_event_index[plane_num]++;
+		printf("Setting up read at %f for %d\n", fg_read.start_time, fg_read.logical_address);
 	}
 	else
 	{
@@ -1760,8 +1761,8 @@ double FtlImpl_Page::process_ftl_queues(Event &event)
 					}
 					else if(first_event.type == READ)
 					{
-						first_event.end_time = next_event_time;
 						next_event_time = read_(e);
+						first_event.end_time = next_event_time;
 					}
 					else if(first_event.type == WRITE)
 					{
