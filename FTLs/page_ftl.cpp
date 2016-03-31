@@ -43,6 +43,8 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller, Ssd &parent):FtlParent(contro
 	bg_cleaning_blocks(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE), 
 	required_bg_events(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE)
 {
+
+
 	//logical_page_list = (struct logical_page *)malloc(ADDRESSABLE_SSD_PAGES * sizeof (struct logical_page));
 	logical_page_list = new logical_page[ADDRESSABLE_SSD_PAGES];
 	for (unsigned int i=0;i<ADDRESSABLE_SSD_PAGES;i++)
@@ -92,9 +94,6 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller, Ssd &parent):FtlParent(contro
 		new_ssd_block.scheduled_for_erasing = false;
 		free_block_list.push_back(new_ssd_block);
 
-		next_block_lba = get_next_block_lba(next_block_lba);
-		if(next_block_lba == 0)
-			break;
 		
 		if(STRIPE_SIZE > 0)
 		{
@@ -112,7 +111,7 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller, Ssd &parent):FtlParent(contro
 			}
 			else
 			{
-				if(stripe_set_remaining[plane_num] == 0)
+				if(stripe_set_remaining[plane_num] == STRIPE_SIZE)
 				{
 					next_lba_to_map = last_lba_mapped[plane_num] - (STRIPE_SIZE - 1) + num_planes*STRIPE_SIZE;
 					stripe_set_remaining[plane_num] = STRIPE_SIZE;
@@ -129,7 +128,9 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller, Ssd &parent):FtlParent(contro
 			for(unsigned int j=0;j<BLOCK_SIZE;j++)
 			{
 				if(next_lba_to_map >= ADDRESSABLE_SSD_PAGES)
+				{
 					break;
+				}
 				cur_address.page = j;
 				new_ssd_block.page_mapping[j] = next_lba_to_map;
 				new_ssd_block.last_page_written = j;
@@ -165,6 +166,9 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller, Ssd &parent):FtlParent(contro
 			plane_encountered_before[plane_num] = true;
 			_effective_plane++;
 		}
+		next_block_lba = get_next_block_lba(next_block_lba);
+		if(next_block_lba == 0)
+			break;
 	}
 	log_write_address.valid = NONE;
 	low_watermark = MAX_BLOCKS_PER_GC;
@@ -181,6 +185,7 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller, Ssd &parent):FtlParent(contro
 	bg_events_time = -1;
 	next_event_time = -1;
 	printf("Total %d Clean %d\n", RAW_SSD_BLOCKS, clean_threshold);
+	printf("allocated %u filled %u free %u threshold %u\n", allocated_block_list.size(), filled_block_list.size(), free_block_list.size(), clean_threshold, clean_threshold);
 	
 	for(unsigned int i=0;i<SSD_SIZE * PACKAGE_SIZE * DIE_SIZE;i++)
 	{
@@ -649,7 +654,6 @@ enum status FtlImpl_Page::read(Event &event, bool &op_complete, double &end_time
 		if( ftl_queue_has_bg_event[plane_num] && 
 			std::distance(ftl_queues[plane_num].begin(), find_location) >= ftl_queue_last_bg_event_index[plane_num])
 			ftl_queue_last_bg_event_index[plane_num]++;
-		printf("Setting up read at %f for %d\n", fg_read.start_time, fg_read.logical_address);
 	}
 	else
 	{
@@ -871,7 +875,7 @@ enum status FtlImpl_Page::garbage_collect_default(Event &event)
 	std::list<struct ssd_block>::iterator max_benefit_block_reference = filled_block_list.end();
 	float max_benefit = 0, cur_benefit;
 	bool cleaning_possible = false;
-	
+
 
 	for(iter=allocated_block_list.begin();iter!=allocated_block_list.end();)
 	{
@@ -946,12 +950,14 @@ enum status FtlImpl_Page::garbage_collect_default(Event &event)
 	struct required_bg_events_pointer required_bg_events_location;
 	required_bg_events_location.rw_start_index = background_events[plane_num].size();
 	double time = event.get_start_time();
+	unsigned int num_num = 0;
 	for(unsigned int i=0;i<BLOCK_SIZE;i++)
 	{
 		cur_page_address.page = i;
 		cur_page_address.valid = PAGE; 
 		if(cur_page_address == logical_page_list[block_to_clean.page_mapping[i]].physical_address)
 		{
+			num_num++;
 			required_bg_events_location.rw_end_index = background_events[plane_num].size();
 			struct ftl_event bg_read;
 			bg_read.type = READ;
@@ -975,6 +981,7 @@ enum status FtlImpl_Page::garbage_collect_default(Event &event)
 			background_events[plane_num].push_back(bg_write);
 		}
 	}
+	printf("GC-in %d\n", num_num);
 	required_bg_events_location.rw_end_index = background_events[plane_num].size();
 	required_bg_events_location.erase_index = background_events[plane_num].size();
 	struct ftl_event bg_erase;

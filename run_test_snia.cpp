@@ -132,6 +132,8 @@ fflush(stdout);
 	std::vector<bool *> op_status;
 	std::vector<enum op_type> op;
 
+	unsigned int write_count = 0;
+	unsigned int read_count = 0;
 	while(!feof(trace_file))
 	{
 		double time;
@@ -144,14 +146,16 @@ fflush(stdout);
 			location = lastLBA - 1;
 		//printf("[Application] %d %f\n", location, time);
 		time = time + initial_delay;
-		if(strcmp(op_type, "Read"))
+		if(!strcmp(op_type, "Read"))
 		{
 			bool result = ssd->event_arrive(READ, location, 1, time, *op_complete, *complete_time);
+			read_count++;
 			op.push_back(OP_READ);
 		}
 		else
 		{
 			bool result = ssd->event_arrive(WRITE, location, 1, time, *op_complete, *complete_time);
+			write_count++;
 			op.push_back(OP_WRITE);
 		}
 		start_time.push_back(time);
@@ -181,6 +185,8 @@ fflush(stdout);
 	}
 
 	
+	printf("Reads %u, Writes %u\n", read_count, write_count);
+
 	ssd->print_ftl_statistics(stdout);
 	fclose(read_file);
 	fclose(write_file);
