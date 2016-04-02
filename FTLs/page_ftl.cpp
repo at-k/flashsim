@@ -186,6 +186,13 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller, Ssd &parent):FtlParent(contro
 		ftl_queue_last_bg_event_index[i] = 0;
 		ftl_queue_has_bg_event[i] = false;
 	}
+
+	sloth_time = (double *)malloc(SSD_SIZE*PACKAGE_SIZE*DIE_SIZE * sizeof(double));
+	for(unsigned int i=0;i<SSD_SIZEPACKAGE_SIZE*DIE_SIZE;i++)
+	{
+		slot_time[i] = 0;
+	}
+
 	bg_events_time = -1;
 	next_event_time = -1;
 	printf("Total %d Clean %d\n", RAW_SSD_BLOCKS, clean_threshold);
@@ -575,7 +582,12 @@ void FtlImpl_Page::get_min_max_erases()
 	}
 	controller.stats.minErase = min_erases;
 	controller.stats.maxErase = max_erases;
-	printf("app writes %u, total writes %u\n", app_writes, total_writes);
+	//printf("app writes %u, total writes %u\n", app_writes, total_writes);
+	printf("sloth times\n");
+	for(unsigned int i=0;i<SSD_SIZE*PACKAGE_SIZE*DIE_SIZE;i++)
+	{
+		printf("%f\n", sloth_time[i]);
+	}
 }
 FtlImpl_Page::~FtlImpl_Page(void)
 {
@@ -641,9 +653,9 @@ enum status FtlImpl_Page::read(Event &event, bool &op_complete, double &end_time
 	fg_read.op_complete_pointer = &op_complete;
 	fg_read.end_time_pointer = &end_time;
 	fg_read.start_time = event.get_start_time();
-	printf("READ ");
-	fg_read.physical_address.print();
-	printf(" %f\n", fg_read.start_time);
+	//printf("READ ");
+	//fg_read.physical_address.print();
+	//printf(" %f\n", fg_read.start_time);
 	if(READ_PREFERENCE)
 	{
 		fg_read.start_time = event.get_start_time();
@@ -717,9 +729,9 @@ enum status FtlImpl_Page::write(Event &event, bool &op_complete, double &end_tim
 	Address write_address = event.get_address();
 	fg_write.physical_address = write_address;
 	fg_write.start_time = event.get_start_time();
-	printf("WRITE ");
-	fg_write.physical_address.print();
-	printf(" %f\n", fg_write.start_time);
+	//printf("WRITE ");
+	//fg_write.physical_address.print();
+	//printf(" %f\n", fg_write.start_time);
 	unsigned int plane_num = write_address.package*PACKAGE_SIZE*DIE_SIZE + write_address.die*DIE_SIZE + write_address.plane;
 	if(fg_write.start_time < plane_free_times[plane_num])
 		fg_write.start_time = plane_free_times[plane_num];
@@ -1337,7 +1349,7 @@ double FtlImpl_Page::process_background_tasks(Event &event)
 					if(plane_free_times[candidate_plane] > first_event.start_time)
 						first_event.start_time = plane_free_times[candidate_plane];
 					first_event.end_time = first_event.start_time + PAGE_READ_DELAY;
-					plane_free_times[plane_num] += first_event.end_time;
+					plane_free_times[plane_num] = first_event.end_time;
 					//struct queued_ftl_event *stalled_bg_read = (struct queued_ftl_event *)malloc(sizeof(struct queued_ftl_event));
 					struct queued_ftl_event *stalled_bg_read = new queued_ftl_event();
 					stalled_bg_read->event = first_event;
@@ -1640,7 +1652,11 @@ void FtlImpl_Page::queue_required_bg_events(Event &event)
 				for(;write_locations_iter!=write_locations.end();write_locations_iter++)
 				{
 					struct queued_ftl_event *parent_write_event = ftl_queues[write_locations_iter->first][write_locations_iter->second];
-					parent_write_event->child = urgent_bg_erase;
+					Address write_from = parent_write_event->write_from_address;
+					write_from.page = 0;
+					write_from.valid = BLOCK;
+					if(write_from == first_event.physical_address)
+						parent_write_event->child = urgent_bg_erase;
 				}
 			}
 			urgent_bg_erase->child = NULL;
@@ -1739,6 +1755,10 @@ double FtlImpl_Page::process_ftl_queues(Event &event)
 			//if(ftl_queue_has_bg_event[plane_num] && ftl_queue_last_bg_event_index[plane_num] == 0 
 			//		&& first_pointer->event.process == FOREGROUND)
 			//	ftl_queue_has_bg_event[plane_num] = false;
+			if(first_pointer && first_pointer->event.start_time <= time && first_pointer->predecessor_completed && !process_worthy)
+			{
+				sloth_time
+			}
 			while(	first_pointer && 
 					process_worthy && 
 					first_pointer->event.start_time <= time &&
@@ -1750,9 +1770,9 @@ double FtlImpl_Page::process_ftl_queues(Event &event)
 				double next_event_time;
 				if(	(first_event.type == READ && 
 					!(logical_page_list[first_event.logical_address].physical_address == first_event.physical_address))
-					//||	
-					//(first_event.type == WRITE && 
-					//!(logical_page_list[first_event.logical_address].physical_address == first_pointer->write_from_address))
+					||	
+					(first_event.type == WRITE && first_event.process == BACKGROUND &&  
+					!(logical_page_list[first_event.logical_address].physical_address == first_pointer->write_from_address))
 					)
 				{
 					//TODO write NOOP
@@ -1760,10 +1780,10 @@ double FtlImpl_Page::process_ftl_queues(Event &event)
 					requires_processing = false;
 					first_event.end_time = first_event.start_time;
 					next_event_time = first_event.start_time;
-					if(first_event.type == WRITE)
-					{
-						mark_reserved(first_event.physical_address, false);
-					}
+					//if(first_event.type == WRITE)
+					//{
+					//	mark_reserved(first_event.physical_address, false);
+					//}
 				}
 				if(requires_processing)
 				{
@@ -1777,25 +1797,25 @@ double FtlImpl_Page::process_ftl_queues(Event &event)
 						erase_block_pointer->lifetime_left -= 1;
 						erase_block_pointer->scheduled_for_erasing = false;
 						first_event.end_time = next_event_time;
-						printf("QUEUE ERASE ");
-						first_event.physical_address.print();
-						printf(" %f\n", first_event.start_time);
+						//printf("QUEUE ERASE ");
+						//first_event.physical_address.print();
+						//printf(" %f\n", first_event.start_time);
 					}
 					else if(first_event.type == READ)
 					{
 						next_event_time = read_(e);
 						first_event.end_time = next_event_time;
-						printf("QUEUE READ ");
-						first_event.physical_address.print();
-						printf(" %d %f\n", first_event.process, first_event.start_time);
+						//printf("QUEUE READ ");
+						//first_event.physical_address.print();
+						//printf(" %d %f\n", first_event.process, first_event.start_time);
 					}
 					else if(first_event.type == WRITE)
 					{
 						next_event_time = write_(e);
 						first_event.end_time = next_event_time;
-						printf("QUEUE WRITE ");
-						first_event.physical_address.print();
-						printf(" %d %f\n", first_event.process, first_event.start_time);
+						//printf("QUEUE WRITE ");
+						//first_event.physical_address.print();
+						//printf(" %d %f\n", first_event.process, first_event.start_time);
 					}
 					//TODO: Right now, this is checking that there are absolutely no background events
 					//A possibly better way would be to check that this round of GC has ended, i.e. the last 

@@ -996,6 +996,7 @@ private:
 
 	unsigned int *ftl_queue_last_bg_event_index;
 	bool *ftl_queue_has_bg_event;
+	double *sloth_time;
 
 	double bg_events_time;
 	double next_event_time;
