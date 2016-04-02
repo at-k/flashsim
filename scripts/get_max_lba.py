@@ -8,6 +8,8 @@ def main():
     lba_max = -1
     for line in trace_file:
         line_parts = line.split('\t')
+        if not int(line_parts[3].strip()) == 0:
+            print 'problem'
         lba = int(line_parts[2].strip())
         if lba > lba_max or lba_max == -1:
             lba_max = lba

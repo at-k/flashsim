@@ -26,6 +26,8 @@
 #include "../ssd.h"
 
 
+unsigned int app_writes = 0;
+unsigned int total_writes = 0;
 
 using namespace ssd;
 
@@ -46,6 +48,7 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller, Ssd &parent):FtlParent(contro
 
 
 	//logical_page_list = (struct logical_page *)malloc(ADDRESSABLE_SSD_PAGES * sizeof (struct logical_page));
+	printf("size of %d\n", sizeof(struct logical_page));
 	logical_page_list = new logical_page[ADDRESSABLE_SSD_PAGES];
 	for (unsigned int i=0;i<ADDRESSABLE_SSD_PAGES;i++)
 	{
@@ -73,6 +76,7 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller, Ssd &parent):FtlParent(contro
 		plane_map[i] = 0;
 	}
 	unsigned int _effective_plane = 0;
+	printf("max is %u, addressable is %u \n", std::numeric_limits<unsigned int>::max(), RAW_SSD_BLOCKS*BLOCK_SIZE);//, RAW_SSD_BLOCKS*BLOCK_SIZE < std::numeric_limits<unsigned int>::max());
 	for(unsigned int i=0;i<RAW_SSD_BLOCKS;i++)
 	{
 		struct ssd_block new_ssd_block;
@@ -571,6 +575,7 @@ void FtlImpl_Page::get_min_max_erases()
 	}
 	controller.stats.minErase = min_erases;
 	controller.stats.maxErase = max_erases;
+	printf("app writes %u, total writes %u\n", app_writes, total_writes);
 }
 FtlImpl_Page::~FtlImpl_Page(void)
 {
@@ -636,6 +641,9 @@ enum status FtlImpl_Page::read(Event &event, bool &op_complete, double &end_time
 	fg_read.op_complete_pointer = &op_complete;
 	fg_read.end_time_pointer = &end_time;
 	fg_read.start_time = event.get_start_time();
+	printf("READ ");
+	fg_read.physical_address.print();
+	printf(" %f\n", fg_read.start_time);
 	if(READ_PREFERENCE)
 	{
 		fg_read.start_time = event.get_start_time();
@@ -709,6 +717,9 @@ enum status FtlImpl_Page::write(Event &event, bool &op_complete, double &end_tim
 	Address write_address = event.get_address();
 	fg_write.physical_address = write_address;
 	fg_write.start_time = event.get_start_time();
+	printf("WRITE ");
+	fg_write.physical_address.print();
+	printf(" %f\n", fg_write.start_time);
 	unsigned int plane_num = write_address.package*PACKAGE_SIZE*DIE_SIZE + write_address.die*DIE_SIZE + write_address.plane;
 	if(fg_write.start_time < plane_free_times[plane_num])
 		fg_write.start_time = plane_free_times[plane_num];
@@ -724,6 +735,7 @@ enum status FtlImpl_Page::write(Event &event, bool &op_complete, double &end_tim
 	stalled_fg_write->predecessor_completed = ftl_queues[plane_num].size() == 0 ? true : false;
 	stalled_fg_write->write_from_address = logical_page_list[fg_write.logical_address].physical_address; 
 	ftl_queues[plane_num].push_back(stalled_fg_write);	
+	app_writes++;
 	if(gc_required)
 	{
 		garbage_collect(event);
@@ -824,6 +836,7 @@ double FtlImpl_Page::write_(Event &event)
 	(*log_write_iter).page_mapping[write_address.page] = logical_page_num;  
 	mark_reserved(write_address, false);
 	(*log_write_iter).last_page_written = write_address.page;
+	total_writes++;
 	return event.get_total_time();
 }
 
@@ -1373,7 +1386,6 @@ double FtlImpl_Page::process_background_tasks(Event &event)
 					last_plane_num = log_write_plane;
 					background_events[plane_num].erase(background_events[plane_num].begin());
 					move_required_pointers(plane_num, 0, 1);
-
 					if(free_block_list.size() <= low_watermark)
 					{
 						urgent_cleaning = true;
@@ -1738,9 +1750,9 @@ double FtlImpl_Page::process_ftl_queues(Event &event)
 				double next_event_time;
 				if(	(first_event.type == READ && 
 					!(logical_page_list[first_event.logical_address].physical_address == first_event.physical_address))
-					||	
-					(first_event.type == WRITE && 
-					!(logical_page_list[first_event.logical_address].physical_address == first_pointer->write_from_address))
+					//||	
+					//(first_event.type == WRITE && 
+					//!(logical_page_list[first_event.logical_address].physical_address == first_pointer->write_from_address))
 					)
 				{
 					//TODO write NOOP
@@ -1765,16 +1777,25 @@ double FtlImpl_Page::process_ftl_queues(Event &event)
 						erase_block_pointer->lifetime_left -= 1;
 						erase_block_pointer->scheduled_for_erasing = false;
 						first_event.end_time = next_event_time;
+						printf("QUEUE ERASE ");
+						first_event.physical_address.print();
+						printf(" %f\n", first_event.start_time);
 					}
 					else if(first_event.type == READ)
 					{
 						next_event_time = read_(e);
 						first_event.end_time = next_event_time;
+						printf("QUEUE READ ");
+						first_event.physical_address.print();
+						printf(" %d %f\n", first_event.process, first_event.start_time);
 					}
 					else if(first_event.type == WRITE)
 					{
 						next_event_time = write_(e);
 						first_event.end_time = next_event_time;
+						printf("QUEUE WRITE ");
+						first_event.physical_address.print();
+						printf(" %d %f\n", first_event.process, first_event.start_time);
 					}
 					//TODO: Right now, this is checking that there are absolutely no background events
 					//A possibly better way would be to check that this round of GC has ended, i.e. the last 

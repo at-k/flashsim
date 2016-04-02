@@ -134,6 +134,7 @@ fflush(stdout);
 
 	unsigned int write_count = 0;
 	unsigned int read_count = 0;
+	unsigned int loop_count = 0;
 	while(!feof(trace_file))
 	{
 		double time;
@@ -141,23 +142,32 @@ fflush(stdout);
 		char op_type[10];
 		bool *op_complete = (bool *)malloc(sizeof(bool));
 		double *complete_time = (double *)malloc(sizeof(double));
-		fscanf(trace_file, "%s\t%lf\t%d\n", op_type, &time, &location);
+		unsigned int disk_num;
+		fscanf(trace_file, "%s\t%lf\t%d\t%d\n", op_type, &time, &location, &disk_num);
+//		printf("%s\t%lf\t%d\n", op_type, time, location);
 		if(location >= lastLBA)
 			location = lastLBA - 1;
 		//printf("[Application] %d %f\n", location, time);
 		time = time + initial_delay;
 		if(!strcmp(op_type, "Read"))
 		{
+			read_count++;
 			bool result = ssd->event_arrive(READ, location, 1, time, *op_complete, *complete_time);
+			if(!result)
+				printf("Read failed\n");
 			read_count++;
 			op.push_back(OP_READ);
 		}
 		else
 		{
+			write_count++;
 			bool result = ssd->event_arrive(WRITE, location, 1, time, *op_complete, *complete_time);
+			if(!result)
+				printf("Write failed\n");
 			write_count++;
 			op.push_back(OP_WRITE);
 		}
+		loop_count++;
 		start_time.push_back(time);
 		end_time.push_back(complete_time);
 		op_status.push_back(op_complete);
@@ -185,7 +195,6 @@ fflush(stdout);
 	}
 
 	
-	printf("Reads %u, Writes %u\n", read_count, write_count);
 
 	ssd->print_ftl_statistics(stdout);
 	fclose(read_file);
