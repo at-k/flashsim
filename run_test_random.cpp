@@ -51,7 +51,7 @@ int main(int argc, char **argv)
 	bool write_data;
 	//unsigned int req_per_thread = 1000;
 	
-	unsigned int total_read_count = 1000, cur_read_count = 0;
+	unsigned int total_read_count = 100000, cur_read_count = 0;
 
 
 	load_config();
@@ -123,7 +123,7 @@ int main(int argc, char **argv)
 			printf("returning failure\n");
 			return -1;
 		}
-		//printf("Write %d %f\n", write_complete, write_end_time);
+		printf("Write %d %f\n", write_complete, write_end_time);
 		prev_noop_time = write_end_time;
 		int k = 0;
 		while(!write_complete)

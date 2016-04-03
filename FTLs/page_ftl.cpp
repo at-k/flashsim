@@ -729,9 +729,9 @@ enum status FtlImpl_Page::write(Event &event, bool &op_complete, double &end_tim
 	Address write_address = event.get_address();
 	fg_write.physical_address = write_address;
 	fg_write.start_time = event.get_start_time();
-	//printf("WRITE ");
-	//fg_write.physical_address.print();
-	//printf(" %f\n", fg_write.start_time);
+	printf("WRITE ");
+	fg_write.physical_address.print();
+	printf(" %f ", fg_write.start_time);
 	unsigned int plane_num = write_address.package*PACKAGE_SIZE*DIE_SIZE + write_address.die*DIE_SIZE + write_address.plane;
 	if(fg_write.start_time < plane_free_times[plane_num])
 		fg_write.start_time = plane_free_times[plane_num];
@@ -745,6 +745,7 @@ enum status FtlImpl_Page::write(Event &event, bool &op_complete, double &end_tim
 	stalled_fg_write->child = NULL;
 	stalled_fg_write->parent_completed = true;
 	stalled_fg_write->predecessor_completed = ftl_queues[plane_num].size() == 0 ? true : false;
+	printf(" %d %u\n", plane_num, ftl_queues[plane_num].size());
 	stalled_fg_write->write_from_address = logical_page_list[fg_write.logical_address].physical_address; 
 	ftl_queues[plane_num].push_back(stalled_fg_write);	
 	app_writes++;
@@ -975,14 +976,12 @@ enum status FtlImpl_Page::garbage_collect_default(Event &event)
 	struct required_bg_events_pointer required_bg_events_location;
 	required_bg_events_location.rw_start_index = background_events[plane_num].size();
 	double time = event.get_start_time();
-	unsigned int num_num = 0;
 	for(unsigned int i=0;i<BLOCK_SIZE;i++)
 	{
 		cur_page_address.page = i;
 		cur_page_address.valid = PAGE; 
 		if(cur_page_address == logical_page_list[block_to_clean.page_mapping[i]].physical_address)
 		{
-			num_num++;
 			required_bg_events_location.rw_end_index = background_events[plane_num].size();
 			struct ftl_event bg_read;
 			bg_read.type = READ;
@@ -1006,7 +1005,6 @@ enum status FtlImpl_Page::garbage_collect_default(Event &event)
 			background_events[plane_num].push_back(bg_write);
 		}
 	}
-	printf("GC-in %d\n", num_num);
 	required_bg_events_location.rw_end_index = background_events[plane_num].size();
 	required_bg_events_location.erase_index = background_events[plane_num].size();
 	struct ftl_event bg_erase;
@@ -1780,10 +1778,10 @@ double FtlImpl_Page::process_ftl_queues(Event &event)
 					requires_processing = false;
 					first_event.end_time = first_event.start_time;
 					next_event_time = first_event.start_time;
-					//if(first_event.type == WRITE)
-					//{
-					//	mark_reserved(first_event.physical_address, false);
-					//}
+					if(first_event.type == WRITE)
+					{
+						mark_reserved(first_event.physical_address, false);
+					}
 				}
 				if(requires_processing)
 				{
