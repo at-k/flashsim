@@ -123,7 +123,7 @@ int main(int argc, char **argv)
 			printf("returning failure\n");
 			return -1;
 		}
-		printf("Write %d %f\n", write_complete, write_end_time);
+		//printf("Write %d %f\n", write_complete, write_end_time);
 		prev_noop_time = write_end_time;
 		int k = 0;
 		while(!write_complete)
