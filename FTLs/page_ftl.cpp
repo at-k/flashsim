@@ -188,9 +188,9 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller, Ssd &parent):FtlParent(contro
 	}
 
 	sloth_time = (double *)malloc(SSD_SIZE*PACKAGE_SIZE*DIE_SIZE * sizeof(double));
-	for(unsigned int i=0;i<SSD_SIZEPACKAGE_SIZE*DIE_SIZE;i++)
+	for(unsigned int i=0;i<SSD_SIZE*PACKAGE_SIZE*DIE_SIZE;i++)
 	{
-		slot_time[i] = 0;
+		sloth_time[i] = 0;
 	}
 
 	bg_events_time = -1;
@@ -1755,10 +1755,10 @@ double FtlImpl_Page::process_ftl_queues(Event &event)
 			//if(ftl_queue_has_bg_event[plane_num] && ftl_queue_last_bg_event_index[plane_num] == 0 
 			//		&& first_pointer->event.process == FOREGROUND)
 			//	ftl_queue_has_bg_event[plane_num] = false;
-			if(first_pointer && first_pointer->event.start_time <= time && first_pointer->predecessor_completed && !process_worthy)
-			{
-				sloth_time
-			}
+			//if(first_pointer && first_pointer->event.start_time <= time && first_pointer->predecessor_completed && !process_worthy)
+			//{
+			//	sloth_time
+			//}
 			while(	first_pointer && 
 					process_worthy && 
 					first_pointer->event.start_time <= time &&
