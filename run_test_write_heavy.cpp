@@ -56,7 +56,7 @@ int main(int argc, char **argv)
 	unsigned int util_percent = 100;
 	unsigned int num_rounds = 100;
 	unsigned int burst_write_gap = 10;
-	unsigned int non_burst_write_gap = 10;
+	unsigned int non_burst_write_gap = 1000;
 	unsigned int burst_writes_per_round = 1000;
 	unsigned int non_burst_writes_per_round = 10;
 
@@ -70,7 +70,7 @@ int main(int argc, char **argv)
 	printf("lastLBA %d\n", lastLBA);
 
 
-	strcat(write_file_name, "_burst_write_");
+	strcat(write_file_name, "burst_write_");
 	strcat(write_file_name, ftl_implementation);
 	strcat(write_file_name, "_");
 	strcat(write_file_name, gc_scheme);
@@ -145,8 +145,9 @@ int main(int argc, char **argv)
 	unsigned int cur_write_num = 0;
 	//location = 0;
 	bool complete = false;
-	for(unsigned int i=0;i<num_rounds;i++)
+	for(unsigned int i=0;i<num_rounds || cur_write_num < total_writes;i++)
 	{
+		printf("round num %u\n", i);
 		if(!complete)
 		{
 			for(unsigned int j=0;j<burst_writes_per_round;j++)
@@ -187,6 +188,9 @@ int main(int argc, char **argv)
 		}
 		if(complete)
 		{
+			//time = time + 1000000000;
+			//complete = false;
+			
 			printf("SSD saturated, need to wait for some time\n");
 			bool all_ops_finished = true;
 			while(time < std::numeric_limits<double>::max())
@@ -202,12 +206,13 @@ int main(int argc, char **argv)
 				}
 				//if(all_ops_finished)
 				//	break;
+				printf("time %f\n", time);
 				prev_noop_time = time;
 				ssd->event_arrive(NOOP, 0, 1, prev_noop_time, noop_complete, time);
 			}
 			time = prev_noop_time;
 			complete = false;
-			//i--;
+			//i--;		
 		}
 		if(cur_write_num >= total_writes)
 			break;

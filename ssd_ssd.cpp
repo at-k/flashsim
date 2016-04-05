@@ -156,8 +156,8 @@ bool Ssd::event_arrive(enum event_type type, ulong logical_address, uint size, d
 
 	if(controller.event_arrive(*event, op_complete, end_time) != SUCCESS)
 	{
-		fprintf(stderr, "Ssd error: %s: request failed:\n", __func__);
-		event -> print(stderr);
+		//fprintf(stderr, "Ssd error: %s: request failed:\n", __func__);
+		//event -> print(stderr);
 		return false;
 	}
 	/* use start_time as a temporary for returning time taken to service event */
