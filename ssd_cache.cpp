@@ -42,6 +42,16 @@ Cache & Cache::operator=(const Cache &c)
 Cache::~Cache()
 {
 	free(cached_pages);
+	std::multimap<std::pair<bool, double>, unsigned int>::iterator evict_iter = eviction_map.begin();
+	printf("size is %d\n", eviction_map.size());
+	fflush(stdout);
+	//int c = 0;
+	//for(;evict_iter != eviction_map.end();)
+	//{
+	//	printf("deleting %d\n", c);
+	//	evict_iter = eviction_map.erase(evict_iter);
+	//	c++;
+	//}
 }
 
 bool Cache::present_in_cache(Event &event)
@@ -82,6 +92,22 @@ void Cache::place_in_cache(Event &event)
 		}
 		assert(iter != possible_entries.second);
 		eviction_map.erase(iter);
+		/*
+		std::multimap<std::pair<bool, double>, unsigned int>::iterator evict_iter = eviction_map.begin();
+		for(;evict_iter != eviction_map.end();evict_iter++)
+		{
+			if(cached_pages[evict_iter->second].logical_address == 27907)
+			{
+				std::multimap<std::pair<bool, double>, unsigned int>::iterator temp_iter = evict_iter;
+				temp_iter++;
+				if(temp_iter != eviction_map.end())
+					printf("cur next of 27907 is %p with logical %u\n", temp_iter._M_node, cached_pages[temp_iter->second].logical_address);
+				else
+					printf("cur next of 27909 is the end\n");
+			}
+		}
+		*/
+
  	}
 	else
  	{
@@ -120,6 +146,7 @@ void Cache::place_in_cache(Event &event)
 			//printf("Removing %d from the map again priority was %d\n", cached_pages[evict_index].logical_address, cached_pages[evict_index].evict_priority);
 			logical_address_map.erase(cached_pages[evict_index].logical_address);
 			//eviction_map.erase(std::pair<bool, double>(cached_pages[evict_index].evict_priority, cached_pages[evict_index].time));
+			/*
 			std::pair<bool, double> cur_key(cached_pages[evict_index].evict_priority, cached_pages[evict_index].time);
 			std::map<std::pair<bool, double>, unsigned int, CompareCacheEntries>::iterator iter;
 			std::pair<	std::map <std::pair<bool, double>, unsigned int>::iterator, 
@@ -131,7 +158,74 @@ void Cache::place_in_cache(Event &event)
 					break;
 			}
 			assert(iter != possible_entries.second);
-			eviction_map.erase(iter);
+			*/
+			/*
+			printf("size before %u\n=======BEFORE\n", eviction_map.size());
+			std::multimap<std::pair<bool, double>, unsigned int>::iterator evict_iter = eviction_map.begin();
+			unsigned int cc = 0;
+			if(logical_add == 47315)
+			{
+				printf("Evicting %u for 47315\n", cached_pages[evict_index].logical_address);
+			}
+			for(;evict_iter != eviction_map.end();evict_iter++)
+			{
+				if(logical_add==47315)
+				{
+					printf("%u\n", cc);
+					fflush(stdout);
+				}
+				if(cached_pages[evict_iter->second].logical_address == 27907)
+				{
+					std::multimap<std::pair<bool, double>, unsigned int>::iterator temp_iter = evict_iter;
+					printf("am gonna break now\n");
+					fflush(stdout);
+					temp_iter++;
+					if(temp_iter != eviction_map.end())
+						printf("cur next of 27907 is %p with logical %u\n", temp_iter._M_node, cached_pages[temp_iter->second].logical_address);
+					else
+						printf("cur next of 27909 is the end\n");
+					fflush(stdout);
+				}
+				cc++;
+			}
+			*/
+			eviction_map.erase(eviction_map.begin());
+			/*
+			printf("===================AFTER\n");
+			printf("size after %u\n", eviction_map.size());
+			printf("inserting %d\n", logical_add);
+			fflush(stdout);
+			evict_iter = eviction_map.begin();
+			cc = 0;
+			if(logical_add == 47315)
+			{
+				printf("Evicting %u for 47315\n", cached_pages[evict_index].logical_address);
+			}
+			for(;evict_iter != eviction_map.end();evict_iter++)
+			{
+				if(logical_add==47315)
+				{
+					printf("%u\n", cc);
+					fflush(stdout);
+				}
+				if(cached_pages[evict_iter->second].logical_address == 27907)
+				{
+					std::multimap<std::pair<bool, double>, unsigned int>::iterator temp_iter = evict_iter;
+					printf("am gonna break now\n");
+					fflush(stdout);
+					temp_iter++;
+					if(temp_iter != eviction_map.end())
+						printf("cur next of 27907 is %p with logical %u\n", temp_iter._M_node, cached_pages[temp_iter->second].logical_address);
+					else
+						printf("cur next of 27909 is the end\n");
+					fflush(stdout);
+				}
+				bool b = evict_iter->first.first;
+				double d = evict_iter->first.second;
+				unsigned int u = evict_iter->second;
+				cc++;
+			}
+			*/
 			//printf("Evicting %d %f %d\n", cached_pages[evict_index].evict_priority, cached_pages[evict_index].time, cached_pages[evict_index].logical_address);
 			//printf("%d %d\n", logical_address_map.size(), eviction_map.size());
 		}
@@ -172,6 +266,21 @@ void Cache::place_in_cache(Event &event)
 	logical_address_map[logical_add] = evict_index;
 	eviction_map.insert(std::pair<std::pair<bool, double>, unsigned int>(std::pair<bool, double>(cached_pages[evict_index].evict_priority, cached_pages[evict_index].time), evict_index));
 	
+		/*
+		std::multimap<std::pair<bool, double>, unsigned int>::iterator evict_iter = eviction_map.begin();
+		for(;evict_iter != eviction_map.end();evict_iter++)
+		{
+			if(cached_pages[evict_iter->second].logical_address == 27907)
+			{
+				std::multimap<std::pair<bool, double>, unsigned int>::iterator temp_iter = evict_iter;
+				temp_iter++;
+				if(temp_iter != eviction_map.end())
+					printf("cur next of 27907 is %p with logical %u\n", temp_iter._M_node, cached_pages[temp_iter->second].logical_address);
+				else
+					printf("cur next of 27909 is the end\n");
+			}
+		}
+		*/
 	//printf("%d %d\n", logical_address_map.size(), eviction_map.size());
 
 	//printf("Adding %d %f %d ", cached_pages[evict_index].logical_address, cached_pages[evict_index].time, cached_pages[evict_index].evict_priority);
@@ -219,6 +328,21 @@ bool Cache::remove_priority_plane(unsigned int plane_num)
 			eviction_map.erase(iter);
 			std::pair<bool, double> new_key(cached_pages[i].evict_priority, cached_pages[i].time);
 			eviction_map.insert(std::pair<std::pair<bool, double>, unsigned int>(new_key, i));
+			/*
+		std::multimap<std::pair<bool, double>, unsigned int>::iterator evict_iter = eviction_map.begin();
+		for(;evict_iter != eviction_map.end();evict_iter++)
+		{
+			if(cached_pages[evict_iter->second].logical_address == 27907)
+			{
+				std::multimap<std::pair<bool, double>, unsigned int>::iterator temp_iter = evict_iter;
+				temp_iter++;
+				if(temp_iter != eviction_map.end())
+					printf("cur next of 27907 is %p with logical %u\n", temp_iter._M_node, cached_pages[temp_iter->second].logical_address);
+				else
+					printf("cur next of 27909 is the end\n");
+			}
+		}
+		*/
 		}
 	}
 	return true;

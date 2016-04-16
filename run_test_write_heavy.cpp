@@ -122,17 +122,9 @@ int main(int argc, char **argv)
 
 	printf("total_writes %d\n", total_writes);
 	bool *op_complete = (bool *) malloc(total_writes * sizeof(bool));
-	if(!op_complete)
-		printf("op complete failed\n");
 	double *start_time = (double *)malloc(total_writes * sizeof(double));
-	if(!start_time)
-		printf("start time failed\n");
 	double *end_time = (double *)malloc(total_writes * sizeof(double));
-	if(!end_time)
-		printf("end time failed\n");
 	unsigned int *addresses = (unsigned int *)malloc(total_writes * sizeof(unsigned int));
-	if(!addresses)
-		printf("end time failed\n");
 	
 	double time = initial_delay;
 	for(unsigned int i=0;i<total_writes;i++)
@@ -147,7 +139,8 @@ int main(int argc, char **argv)
 	bool complete = false;
 	for(unsigned int i=0;i<num_rounds || cur_write_num < total_writes;i++)
 	{
-		printf("round num %u\n", i);
+		//printf("round num %u, write num %u\n", i, cur_write_num);
+		bool total_writes_completed = false;
 		if(!complete)
 		{
 			for(unsigned int j=0;j<burst_writes_per_round;j++)
@@ -165,8 +158,15 @@ int main(int argc, char **argv)
 					break;
 				}
 				cur_write_num++;
+				if(cur_write_num >= total_writes)
+				{
+					total_writes_completed = true;
+					break;
+				}
 			}
 		}
+		if(total_writes_completed)
+			break;
 		if(!complete)
 		{
 			for(unsigned int j=0;j<non_burst_writes_per_round;j++)
@@ -184,13 +184,19 @@ int main(int argc, char **argv)
 					break;
 				}
 				cur_write_num++;
+				if(cur_write_num >= total_writes)
+				{
+					total_writes_completed = true;
+					break;
+				}
 			}
 		}
 		if(complete)
 		{
+			break;
 			//time = time + 1000000000;
 			//complete = false;
-			
+			/*
 			printf("SSD saturated, need to wait for some time\n");
 			bool all_ops_finished = true;
 			while(time < std::numeric_limits<double>::max())
@@ -210,10 +216,14 @@ int main(int argc, char **argv)
 				prev_noop_time = time;
 				ssd->event_arrive(NOOP, 0, 1, prev_noop_time, noop_complete, time);
 			}
-			time = prev_noop_time;
+			//if(time == std::numeric_limits<double>::max())
+			//	time = prev_noop_time; 
 			complete = false;
 			//i--;		
+			*/
 		}
+		if(total_writes_completed)
+			break;
 		if(cur_write_num >= total_writes)
 			break;
 	}
@@ -221,9 +231,22 @@ int main(int argc, char **argv)
 
 	
 	prev_noop_time = time;
+	bool all_ops_finished = true;
 	while(prev_noop_time < std::numeric_limits<double>::max())
 	{
-		ssd->event_arrive(NOOP, 0, 1, prev_noop_time, noop_complete, prev_noop_time);
+				all_ops_finished = true;
+				for(unsigned int j=0;j<cur_write_num;j++)
+				{
+					if(!op_complete[j])
+					{
+						all_ops_finished = false;
+						break;
+					}
+				}
+				if(all_ops_finished)
+					break;
+				ssd->event_arrive(NOOP, 0, 1, prev_noop_time, noop_complete, prev_noop_time);
+		//ssd->event_arrive(NOOP, 0, 1, prev_noop_time, noop_complete, prev_noop_time);
 	}
 	
 
@@ -232,7 +255,7 @@ int main(int argc, char **argv)
 	{
 		if(!op_complete[i])		
 		{
-			//printf("Event %d not complete\n", i);
+			printf("Event %d not complete\n", i);
 			continue;
 		}
 		fprintf(write_file, "%.5lf\t%.5lf\t%.5lf\t%u\n", start_time[i], end_time[i] - start_time[i], end_time[i], addresses[i]);

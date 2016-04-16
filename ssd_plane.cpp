@@ -532,10 +532,12 @@ void Plane::serialize_access(double start_time, double duration, Event &event)
 		}
 	}
 
-	/*
-	if(event.get_event_type() == READ)
+		/*
+	
+	if(true)
 	{
 		printf("Waits on plane for reading %d of duration %f\n", event.get_logical_address(), duration);
+		
 		double last_time = start_time;
 		for(it=first;it!=insert_location;it++)
 		{
@@ -558,11 +560,9 @@ void Plane::serialize_access(double start_time, double duration, Event &event)
 			printf("Last Time: %f Duration: %f Start %f End %f \n", last_time, it->unlock_time - last_time, it->lock_time, it->unlock_time);
 			last_time = it->unlock_time;
 		}
-
-		printf("Total plane wait time: %f\n", sched_time - start_time);
+		printf("Total plane wait time for event type %d is : %f\n", event.get_event_type(), sched_time - start_time);
 		printf("====\n");
 	}
-	
 	printf("Type: ");
 	switch(it->type)
 	{

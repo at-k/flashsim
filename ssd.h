@@ -816,39 +816,45 @@ struct ssd_block
 	unsigned int valid_page_count;
 	unsigned int lifetime_left;
 	unsigned int *page_mapping;
-	bool *reserved_page;
-	unsigned int last_page_written;
+	unsigned int reserved_page_count;
+	unsigned int page_to_write;
 	bool scheduled_for_erasing;
-	ssd_block():physical_address(), page_mapping(NULL), reserved_page(NULL) {}
+	double page_copy_complete_time;
+	ssd_block():physical_address(), page_mapping(NULL), reserved_page_count(0) {}
 	ssd_block(const struct ssd_block &b):physical_address(b.physical_address)
 	{
 		valid_page_count = b.valid_page_count;
 		lifetime_left = b.lifetime_left;
-		last_page_written = b.last_page_written;
+		page_to_write = b.page_to_write;
 		scheduled_for_erasing = b.scheduled_for_erasing;
+		page_copy_complete_time = b.page_copy_complete_time;
 		page_mapping = (unsigned int *)malloc(BLOCK_SIZE*sizeof(unsigned int));
-		reserved_page = (bool *)malloc(BLOCK_SIZE * sizeof(bool));
 		for(unsigned int i=0;i<BLOCK_SIZE;i++)
 		{
 			page_mapping[i] = b.page_mapping[i];
-			reserved_page[i] = b.reserved_page[i];
 		}
+		reserved_page_count = b.reserved_page_count;
 	}
 	struct ssd_block& operator=(const struct ssd_block &b)
 	{
 		physical_address = b.physical_address;
 		valid_page_count = b.valid_page_count;
 		lifetime_left = b.lifetime_left;
-		last_page_written = b.last_page_written;
+		page_to_write = b.page_to_write;
 		scheduled_for_erasing = b.scheduled_for_erasing;
+		page_copy_complete_time = b.page_copy_complete_time;
 		page_mapping = (unsigned int *)malloc(BLOCK_SIZE*sizeof(unsigned int));
-		reserved_page = (bool *)malloc(BLOCK_SIZE * sizeof(bool));
 		for(unsigned int i=0;i<BLOCK_SIZE;i++)
 		{
 			page_mapping[i] = b.page_mapping[i];
-			reserved_page[i] = b.reserved_page[i];
 		}
+		reserved_page_count = b.reserved_page_count;
 		return *this;
+	}
+	~ssd_block()
+	{
+		free(page_mapping);
+		page_mapping = NULL;
 	}
 };
 
@@ -985,6 +991,7 @@ private:
 	std::vector< std::vector<struct queued_ftl_event *> >ftl_queues;
 	std::vector< std::vector<struct ssd_block> >bg_cleaning_blocks;
 	std::vector< std::vector<struct required_bg_events_pointer> >required_bg_events;
+	std::vector<struct ftl_event> waiting_events_queue;
 
 	double *plane_free_times;
 	struct logical_page *logical_page_list;
@@ -996,6 +1003,7 @@ private:
 
 	unsigned int *ftl_queue_last_bg_event_index;
 	bool *ftl_queue_has_bg_event;
+	bool *cleaning_queued;
 
 	double bg_events_time;
 	double next_event_time;
@@ -1006,21 +1014,22 @@ private:
 	unsigned int get_page_number_in_block(unsigned int lba);
 	unsigned int get_block_starting_lba(unsigned int lba);
 	unsigned int get_logical_block_num(unsigned int lba);
-	Address find_write_location(Event &event, Address cur, bool *already_open);
-	bool increment_log_write_address(Event &event, Address asked_for, bool already_allocated);
+	Address find_write_location(double time, Address cur, bool *already_open);
+	bool increment_log_write_address(double time, Address asked_for, bool already_allocated);
 	bool allocate_new_block(Address requested_address);
 	unsigned int get_next_block_lba(unsigned int lba);
 	Address get_next_block_pba(Address pba);
-	enum status garbage_collect(Event &event);
-	enum status garbage_collect_default(Event &event);
-	enum status garbage_collect_cached(Event &event);
+	enum status garbage_collect(double time);
+	enum status garbage_collect_default(double time);
+	enum status garbage_collect_cached(double time);
 	double process_background_tasks(Event &event);
 	double read_(Event &event);
 	double write_(Event &event);
-	bool queue_required_bg_events(Event &event);
+	bool queue_required_bg_events(double time, bool necessary);
 	double process_ftl_queues(Event &event);
 	void move_required_pointers(unsigned int plane_num, unsigned int start, unsigned int end);
 	bool mark_reserved(Address address, bool is_reserved);
+	void process_waiting_events(double time);
 };
 
 class FtlImpl_Fast : public FtlParent
