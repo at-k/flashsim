@@ -43,8 +43,6 @@ Cache::~Cache()
 {
 	free(cached_pages);
 	std::multimap<std::pair<bool, double>, unsigned int>::iterator evict_iter = eviction_map.begin();
-	printf("size is %d\n", eviction_map.size());
-	fflush(stdout);
 	//int c = 0;
 	//for(;evict_iter != eviction_map.end();)
 	//{

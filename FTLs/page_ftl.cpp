@@ -164,19 +164,19 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller, Ssd &parent):FtlParent(contro
 			break;
 	}
 	log_write_address.valid = NONE;
-	low_watermark = MAX_BLOCKS_PER_GC;
-	//low_watermark = 1;
+	//low_watermark = MAX_BLOCKS_PER_GC;
+	low_watermark = 1;
 	plane_free_times = (double *)malloc(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * sizeof(double));
 
 	ftl_queue_last_bg_event_index = (unsigned int *)malloc(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * sizeof(unsigned int));
 	ftl_queue_has_bg_event = (bool *)malloc(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * sizeof(bool));
-	cleaning_queued = (bool *)malloc(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * sizeof(bool));
+	cleaning_queued = (unsigned int *)malloc(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * sizeof(unsigned int));
 	for(unsigned int i=0;i<SSD_SIZE * PACKAGE_SIZE * DIE_SIZE;i++)
 	{
 		plane_free_times[i] = 0;
 		ftl_queue_last_bg_event_index[i] = 0;
 		ftl_queue_has_bg_event[i] = false;
-		cleaning_queued[i] = false;
+		cleaning_queued[i] = 0;
 	}
 
 
@@ -900,7 +900,9 @@ enum status FtlImpl_Page::garbage_collect(double time)
 	{
 		total_bg_cleaning_blocks += bg_cleaning_blocks[i].size();
 		if(bg_cleaning_blocks[i].size() > 0)
+		{
 			total_bg_cleaning_planes++;
+		}
 	}
 	if(MAX_GC_BLOCKS > 0 && total_bg_cleaning_blocks >= MAX_GC_BLOCKS)
 	{
@@ -1155,7 +1157,7 @@ enum status FtlImpl_Page::garbage_collect_cached(double time)
 	}
 	if(!cleaning_possible)
 	{
-		//printf("cleaning is not possible\n");
+		printf("cleaning is not possible\n");
 		return FAILURE;
 	} 
 	unsigned int target_plane = max_benefit_plane;
@@ -1589,12 +1591,16 @@ bool FtlImpl_Page::queue_required_bg_events(double time, bool necessary)
 	
 	//unsigned int plane_num = urgent_cleaning_plane;
 
+	bool max_benefit_plane = true;
 	std::vector<std::pair<unsigned int, double>>::iterator plane_iter = plane_sequence.begin();
 	for(;plane_iter != plane_sequence.end();plane_iter++)
 	{
 		unsigned int plane_num = (*plane_iter).first;
-		if(cleaning_queued[plane_num])
+		if(cleaning_queued[plane_num] > 0)
+		{
+			max_benefit_plane = false;
 			continue;
+		}
 
 		double first_event_start_time = background_events[plane_num].front().start_time;
 		
@@ -1681,16 +1687,29 @@ bool FtlImpl_Page::queue_required_bg_events(double time, bool necessary)
 		unsigned int last_plane_num = plane_num;
 		std::vector<std::pair<unsigned int, unsigned int>> write_locations;
 		//while(cur_plane_bg_events.size() > 0 && urgent_cleaning)
-		while(background_events[plane_num].size() > 0 && urgent_cleaning)
+		bool queue_erases = false;
+		Address queue_erases_upto;
+		queue_erases_upto.valid = NONE;
+		unsigned int queue_erases_offset = 0;
+		std::vector<struct ftl_event>::iterator bg_events_iter = background_events[plane_num].begin();
+		//while(background_events[plane_num].size() > 0 && urgent_cleaning)
+		for(;bg_events_iter != background_events[plane_num].end();)
 		{
 			//TODO: It might be a better idea to set priority plane only before dispatching the event
 			//from process_ftl_queues, just as removal of priority planes is done from there
 			if(first)
 				ssd.cache.add_priority_plane(plane_num);
 			//struct ftl_event first_event = cur_plane_bg_events.front();
-			struct ftl_event first_event = background_events[plane_num].front();
+			//struct ftl_event first_event = background_events[plane_num].front();
+			struct ftl_event first_event = *bg_events_iter;
 			if(first_event.start_time < time)
 				first_event.start_time = time;
+			if(queue_erases && first_event.type != ERASE)
+			{
+				queue_erases_offset++;
+				bg_events_iter++;
+				continue;
+			}
 
 			if(first_event.type != ERASE && 
 				!(logical_page_list[first_event.logical_address].physical_address == first_event.physical_address) )
@@ -1700,9 +1719,12 @@ bool FtlImpl_Page::queue_required_bg_events(double time, bool necessary)
 				//if(cur_plane_bg_events.size() > 0)
 				//	cur_plane_bg_events.front().start_time = first_event.start_time;
 				
-				background_events[plane_num].erase(background_events[plane_num].begin());
-				if(background_events[plane_num].size() > 0)
-					background_events[plane_num].front().start_time = first_event.start_time;
+				//background_events[plane_num].erase(background_events[plane_num].begin());
+				bg_events_iter = background_events[plane_num].erase(bg_events_iter);
+				//if(background_events[plane_num].size() > 0)
+				if(bg_events_iter != background_events[plane_num].end())
+					bg_events_iter->start_time = first_event.start_time;
+					//background_events[plane_num].front().start_time = first_event.start_time;
 				move_required_pointers(plane_num, 0, 1);
 				continue;
 			}
@@ -1734,9 +1756,22 @@ bool FtlImpl_Page::queue_required_bg_events(double time, bool necessary)
 				candidate_address = find_write_location(first_event.start_time, log_write_address, &write_address_already_open);
 				if(candidate_address.valid == NONE)
 				{
-					//assert(false);
-					break;
+					queue_erases_upto = first_event.physical_address;
+					queue_erases_upto.page = 0;
+					queue_erases_upto.valid = BLOCK;
+					queue_erases_offset = 0;
+					queue_erases = true;
+					/* This is the smart switch ;) */
+					MAX_GC_PLANES = 0;
+					if(MAX_GC_BLOCKS < SSD_SIZE*PACKAGE_SIZE*DIE_SIZE*MAX_BLOCKS_PER_GC)
+						MAX_GC_BLOCKS = SSD_SIZE*PACKAGE_SIZE*DIE_SIZE*MAX_BLOCKS_PER_GC;
+					continue;	
 				}
+				//if(!write_address_already_open && !max_benefit_plane)
+				//{
+				//	printf("Other planes were getting too demanding\n");
+				//	break;
+				//}
 				bool increment_ret_val = increment_log_write_address(first_event.start_time, candidate_address, write_address_already_open);
 				first_event.physical_address = log_write_address;
 				if(!mark_reserved(log_write_address, true))
@@ -1771,6 +1806,10 @@ bool FtlImpl_Page::queue_required_bg_events(double time, bool necessary)
 			}
 			else if(first_event.type == ERASE)
 			{
+				if(queue_erases && first_event.physical_address == queue_erases_upto)
+				{
+					break;
+				}
 				if(plane_free_times[plane_num] > first_event.start_time)
 					first_event.start_time = plane_free_times[plane_num];
 				first_event.end_time = first_event.start_time + BLOCK_ERASE_DELAY;
@@ -1811,15 +1850,19 @@ bool FtlImpl_Page::queue_required_bg_events(double time, bool necessary)
 				required_bg_events[plane_num].erase(required_bg_events[plane_num].begin());
 				is_erase = true;
 				last_plane_num = plane_num;
-				move_required_pointers(plane_num, 0, 1);
-				cleaning_queued[plane_num] = true;
-				//printf("Erasing ");
+				if(queue_erases)
+					move_required_pointers(plane_num, queue_erases_offset, queue_erases_offset + 1);
+				else
+					move_required_pointers(plane_num, 0, 1);
+				cleaning_queued[plane_num]++;
+				//printf("Erase at ");
 				//first_event.physical_address.print();
 				//printf("\n");
 			}
 		
 			//cur_plane_bg_events.erase(cur_plane_bg_events.begin());
-			background_events[plane_num].erase(background_events[plane_num].begin());
+			//background_events[plane_num].erase(background_events[plane_num].begin());
+			bg_events_iter = background_events[plane_num].erase(bg_events_iter);
 				
 			//if(urgent_cleaning && is_erase)
 			//{
@@ -1830,9 +1873,10 @@ bool FtlImpl_Page::queue_required_bg_events(double time, bool necessary)
 			//	}
 			//}
 			first = false;
-			if(is_erase)
+			if(is_erase && bg_events_iter->type == READ)
 				break;
 		}
+		max_benefit_plane = false;
 	}
 	return true;
 	/*
@@ -1936,7 +1980,7 @@ double FtlImpl_Page::process_ftl_queues(Event &event)
 						}
 						bg_cleaning_blocks[plane_num].erase(bg_cleaning_blocks[plane_num].begin());
 						first_event.end_time = next_event_time;
-						cleaning_queued[plane_num] = false;
+						cleaning_queued[plane_num]--;
 						//printf("QUEUE ERASE ");
 						//first_event.physical_address.print();
 						//printf(" %f\n", first_event.start_time);
@@ -1947,7 +1991,7 @@ double FtlImpl_Page::process_ftl_queues(Event &event)
 						first_event.end_time = next_event_time;
 						//printf("QUEUE READ ");
 						//first_event.physical_address.print();
-						//printf(" %d %f\n", first_event.process, first_event.start_time);
+						//printf(" ends at %f\n", first_event.end_time);
 					}
 					else if(first_event.type == WRITE)
 					{
@@ -1969,7 +2013,7 @@ double FtlImpl_Page::process_ftl_queues(Event &event)
 						}
 						//printf("QUEUE WRITE ");
 						//first_event.physical_address.print();
-						//printf(" %d %f\n", first_event.process, first_event.start_time);
+						//printf(" ends at %f\n", first_event.start_time);
 					}
 					//TODO: Right now, this is checking that there are absolutely no background events
 					//A possibly better way would be to check that this round of GC has ended, i.e. the last 
@@ -2065,6 +2109,7 @@ double FtlImpl_Page::process_ftl_queues(Event &event)
 				//	printf("%f", ret_time);
 				//printf(" from plane %d\n", plane_num);
 			}
+			fflush(stdout);
 		}
 	}
 	while(processed_event);

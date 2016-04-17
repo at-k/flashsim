@@ -147,10 +147,10 @@ extern const uint FTL_IMPLEMENTATION;
 extern const uint GC_SCHEME;
 
 /* Maximum blocks to queue up for cleaning, 0 means no restriction */
-extern const uint MAX_GC_BLOCKS;
+extern uint MAX_GC_BLOCKS;
 
 /* Maximum planes to clean in parallel, 0 means no restriction */
-extern const uint MAX_GC_PLANES;
+extern uint MAX_GC_PLANES;
 
 /* Maximum blocks to clean in one call to GC */
 extern const uint MAX_BLOCKS_PER_GC;
@@ -1003,7 +1003,7 @@ private:
 
 	unsigned int *ftl_queue_last_bg_event_index;
 	bool *ftl_queue_has_bg_event;
-	bool *cleaning_queued;
+	unsigned int *cleaning_queued;
 
 	double bg_events_time;
 	double next_event_time;

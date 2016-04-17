@@ -232,20 +232,20 @@ int main(int argc, char **argv)
 	
 	prev_noop_time = time;
 	bool all_ops_finished = true;
-	while(prev_noop_time < std::numeric_limits<double>::max())
+	while(true)//(prev_noop_time < std::numeric_limits<double>::max())
 	{
-				all_ops_finished = true;
-				for(unsigned int j=0;j<cur_write_num;j++)
-				{
-					if(!op_complete[j])
-					{
-						all_ops_finished = false;
-						break;
-					}
-				}
-				if(all_ops_finished)
-					break;
-				ssd->event_arrive(NOOP, 0, 1, prev_noop_time, noop_complete, prev_noop_time);
+		all_ops_finished = true;
+		for(unsigned int j=0;j<cur_write_num;j++)
+		{
+			if(!op_complete[j])
+			{
+				all_ops_finished = false;
+				break;
+			}
+		}
+		if(all_ops_finished)
+			break;
+		ssd->event_arrive(NOOP, 0, 1, prev_noop_time, noop_complete, prev_noop_time);
 		//ssd->event_arrive(NOOP, 0, 1, prev_noop_time, noop_complete, prev_noop_time);
 	}
 	
