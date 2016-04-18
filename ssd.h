@@ -991,9 +991,9 @@ private:
 	std::vector< std::vector<struct queued_ftl_event *> >ftl_queues;
 	std::vector< std::vector<struct ssd_block> >bg_cleaning_blocks;
 	std::vector< std::vector<struct required_bg_events_pointer> >required_bg_events;
+	std::vector<std::pair<double, double>>plane_free_times;
 	std::vector<struct ftl_event> waiting_events_queue;
 
-	double *plane_free_times;
 	struct logical_page *logical_page_list;
 	std::list<struct ssd_block> free_block_list;
 	std::list<struct ssd_block> allocated_block_list;
