@@ -1004,6 +1004,7 @@ private:
 	unsigned int *ftl_queue_last_bg_event_index;
 	bool *ftl_queue_has_bg_event;
 	unsigned int *cleaning_queued;
+	double *plane_prioritized_till;
 
 	double bg_events_time;
 	double next_event_time;
@@ -1030,6 +1031,7 @@ private:
 	void move_required_pointers(unsigned int plane_num, unsigned int start, unsigned int end);
 	bool mark_reserved(Address address, bool is_reserved);
 	void process_waiting_events(double time);
+	void unset_plane_priorities(double time);
 };
 
 class FtlImpl_Fast : public FtlParent

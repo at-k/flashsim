@@ -224,7 +224,7 @@ void Cache::place_in_cache(Event &event)
 				cc++;
 			}
 			*/
-			//printf("Evicting %d %f %d\n", cached_pages[evict_index].evict_priority, cached_pages[evict_index].time, cached_pages[evict_index].logical_address);
+			printf("Evicting %d %f %d\n", cached_pages[evict_index].evict_priority, cached_pages[evict_index].time, cached_pages[evict_index].logical_address);
 			//printf("%d %d\n", logical_address_map.size(), eviction_map.size());
 		}
 		else
@@ -307,6 +307,8 @@ bool Cache::remove_priority_plane(unsigned int plane_num)
 	for(unsigned int i=0;i<size;i++)
 	{
 		Address cache_entry_address = cached_pages[i].physical_address;
+		if(cache_entry_address.valid == NONE)
+			continue;
 		unsigned int cache_entry_plane = cache_entry_address.package*PACKAGE_SIZE*DIE_SIZE + cache_entry_address.die*DIE_SIZE + cache_entry_address.plane;
 		if(cache_entry_plane == plane_num)
 		{
@@ -321,6 +323,10 @@ bool Cache::remove_priority_plane(unsigned int plane_num)
 					break;
 
 			}
+			//if(iter == possible_entries.second)
+			//{
+			//	assert(false);
+			//}
 			assert(iter != possible_entries.second);
 			cached_pages[i].evict_priority = false;
 			eviction_map.erase(iter);

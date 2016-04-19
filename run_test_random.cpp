@@ -266,6 +266,7 @@ int main(int argc, char **argv)
 					op_complete_time[earliest_event_index] - op_start_time[earliest_event_index], 
 					op_complete_time[earliest_event_index], op_addresses[earliest_event_index]);
 			write_count++;
+			printf("Adding %d to completed writes\n", op_addresses[earliest_event_index]);
 			addresses.insert(op_addresses[earliest_event_index]);
 		}
 		prev_noop_time = op_complete_time[earliest_event_index];
@@ -284,8 +285,8 @@ int main(int argc, char **argv)
 		{
 			location = rand()%lastLBA;
 			op_addresses[earliest_event_index] = location;
-			//printf("[Application] sending a write for %d at time %f\n", op_addresses[earliest_event_index], 
-			//		op_start_time[earliest_event_index]);
+			printf("[Application] sending a write for %d at time %f with op complete %d at address %p\n", op_addresses[earliest_event_index], 
+					op_start_time[earliest_event_index], op_complete[earliest_event_index], &op_complete[earliest_event_index]);
 			result = ssd->event_arrive(WRITE, location, 1, (double) op_start_time[earliest_event_index], 
 					op_complete[earliest_event_index], op_complete_time[earliest_event_index]);
 			op_rw_type[earliest_event_index] = OP_WRITE;
@@ -299,8 +300,8 @@ int main(int argc, char **argv)
 				location = rand()%lastLBA;
 			}
 			op_addresses[earliest_event_index] = location;
-			//printf("[Application] sending a read for %d at time %f\n", op_addresses[earliest_event_index], 
-			//		op_start_time[earliest_event_index]);
+			printf("[Application] sending a read for %d at time %f\n", op_addresses[earliest_event_index], 
+					op_start_time[earliest_event_index]);
 			result = ssd->event_arrive(READ, location, 1, (double) op_start_time[earliest_event_index], 
 					op_complete[earliest_event_index], op_complete_time[earliest_event_index]);
 			op_rw_type[earliest_event_index] = OP_READ;
