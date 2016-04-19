@@ -926,10 +926,10 @@ enum status FtlImpl_Page::garbage_collect(double time)
 	{
 		return FAILURE;
 	}
-	//if(MAX_GC_PLANES > 0 && GC_SCHEME == 1 && total_bg_cleaning_planes >= MAX_GC_PLANES)
-	//{
-	//	return FAILURE;
-	//}
+	if(MAX_GC_PLANES > 0 && GC_SCHEME == 1 && total_bg_cleaning_planes > MAX_GC_PLANES)
+	{
+		return FAILURE;
+	}
 	switch(GC_SCHEME)
 	{
 		case(0):
@@ -1631,11 +1631,11 @@ bool FtlImpl_Page::queue_required_bg_events(double time, bool necessary)
 	std::vector<std::pair<unsigned int, double>>::iterator plane_iter = plane_sequence.begin();
 	for(;plane_iter != plane_sequence.end();plane_iter++)
 	{
-		if(!max_benefit_plane)
-		{
-			printf("breaking because \n");
-			break;
-		}
+		//if(!max_benefit_plane)
+		//{
+		//	printf("breaking because \n");
+		//	break;
+		//}
 		unsigned int plane_num = (*plane_iter).first;
 		if(cleaning_queued[plane_num] > 0)
 		{
