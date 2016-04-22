@@ -58,7 +58,7 @@ int main(int argc, char **argv)
 	unsigned int burst_write_gap = 10;
 	unsigned int non_burst_write_gap = 1000;
 	unsigned int burst_writes_per_round = 1000;
-	unsigned int non_burst_writes_per_round = 10;
+	unsigned int non_burst_writes_per_round = 100;
 
 	char ftl_implementation[10] = {'0' + FTL_IMPLEMENTATION};
 	char gc_scheme[10] = {'0' + GC_SCHEME};
@@ -143,6 +143,7 @@ int main(int argc, char **argv)
 		bool total_writes_completed = false;
 		if(!complete)
 		{
+			printf("Doing burst writes\n");
 			for(unsigned int j=0;j<burst_writes_per_round;j++)
 			{
 				location = rand()%lastLBA;
@@ -169,6 +170,7 @@ int main(int argc, char **argv)
 			break;
 		if(!complete)
 		{
+			printf("Doing idle time\n");
 			for(unsigned int j=0;j<non_burst_writes_per_round;j++)
 			{
 				location = rand()%lastLBA;

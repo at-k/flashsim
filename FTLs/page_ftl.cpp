@@ -87,8 +87,6 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller, Ssd &parent):FtlParent(contro
 		new_ssd_block.page_to_write = 0;
 		new_ssd_block.scheduled_for_erasing = false;
 		free_block_list.push_back(new_ssd_block);
-		free(new_ssd_block.page_mapping);
-		new_ssd_block.page_mapping = NULL;
 		if(STRIPE_SIZE > 0)
 		{
 			unsigned int plane_num = new_ssd_block.physical_address.package*PACKAGE_SIZE*DIE_SIZE + new_ssd_block.physical_address.die*DIE_SIZE + new_ssd_block.physical_address.plane;
@@ -160,6 +158,8 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller, Ssd &parent):FtlParent(contro
 			plane_encountered_before[plane_num] = true;
 			_effective_plane++;
 		}
+		free(new_ssd_block.page_mapping);
+		new_ssd_block.page_mapping = NULL;
 		next_block_lba = get_next_block_lba(next_block_lba);
 		if(next_block_lba == 0)
 			break;
@@ -377,6 +377,11 @@ Address FtlImpl_Page::find_write_location(double time, Address cur, bool *alread
 		Address candidate_address = (*iter).physical_address;
 		unsigned int plane_num = candidate_address.package*PACKAGE_SIZE*DIE_SIZE + candidate_address.die*DIE_SIZE + candidate_address.plane;
 		double wait_time = plane_free_times[plane_num].second;
+		if(GC_SCHEME == 1 && bg_cleaning_blocks[plane_num].size() > 0)
+		{
+			//wait_time += ((background_events[plane_num].size() - bg_cleaning_blocks[plane_num].size())/2) * PAGE_READ_DELAY + bg_cleaning_blocks[plane_num].size() * BLOCK_ERASE_DELAY;
+			wait_time += bg_cleaning_blocks[plane_num].size() * BLOCK_ERASE_DELAY;
+		}
 		if(wait_time < min_wait_time || !found_block)
 		{
 			min_queue_iter = iter;
@@ -719,6 +724,7 @@ enum status FtlImpl_Page::write(Event &event, bool &op_complete, double &end_tim
 //enum status FtlImpl_Page::write(Event &event, bool &op_complete, double &end_time)
 void FtlImpl_Page::process_waiting_events(double time)
 {
+	printf("Num events in waiting %u\n", waiting_events_queue.size());
 	while(waiting_events_queue.size() > 0)
 	{
 		struct ftl_event fg_write = waiting_events_queue.front();
@@ -733,6 +739,7 @@ void FtlImpl_Page::process_waiting_events(double time)
 				printf("calling queue required from process waiting 1\n");
 				queue_required_bg_events(fg_write.start_time, true);
 			}
+			printf("CANT WRITE\n");
 			break; 
 		} 
 		unsigned int post_fbl_size = free_block_list.size();
@@ -1507,7 +1514,7 @@ double FtlImpl_Page::process_background_tasks(Event &event)
 					//printf("\n");
 					controller.issue(e);
 					first_event.end_time = e.get_total_time();
-					continuous_erases = true;
+					//continuous_erases = true;
 					plane_prioritized_till[plane_num] = first_event.end_time;
 					
 					/*
@@ -1583,6 +1590,7 @@ double FtlImpl_Page::process_background_tasks(Event &event)
 
 bool FtlImpl_Page::queue_required_bg_events(double time, bool necessary)
 {
+	printf("urgent queueing called\n");
 	bool urgent_cleaning = true;
 	unsigned int urgent_cleaning_plane;
 	unsigned int min_ops_required = UINT_MAX;
@@ -1948,6 +1956,7 @@ double FtlImpl_Page::process_ftl_queues(Event &event)
 			{
 				continue;
 			}
+			printf("FTL queue length for %d is %d\n", plane_num, ftl_queues[plane_num].size());
 			std::vector<struct queued_ftl_event *>::iterator first_iterator = ftl_queues[plane_num].begin();
 			struct queued_ftl_event *first_pointer = *(first_iterator);
 			first_iterator = ftl_queues[plane_num].begin();
@@ -2102,13 +2111,13 @@ double FtlImpl_Page::process_ftl_queues(Event &event)
 				if(ftl_queues[plane_num].size() > 0)
 				{
 					first_pointer = *(ftl_queues[plane_num].begin());
-					if(first_event.type == ERASE && first_pointer->event.type == ERASE)
-						first_pointer->event.start_time = first_event.start_time;
-					else
-					{
+					//if(first_event.type == ERASE && first_pointer->event.type == ERASE)
+					//	first_pointer->event.start_time = first_event.start_time;
+					//else
+					//{
 						if(first_pointer->event.start_time < next_event_time)
 							first_pointer->event.start_time = next_event_time;
-					}
+					//}
 					double delay = 0;
 					if(first_pointer->event.type == READ)
 						delay = PAGE_READ_DELAY;

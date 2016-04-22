@@ -51,7 +51,7 @@ int main(int argc, char **argv)
 	bool write_data;
 	//unsigned int req_per_thread = 1000;
 	
-	unsigned int total_read_count = 100000, cur_read_count = 0;
+	unsigned int total_read_count = 1000000, cur_read_count = 0;
 
 
 	load_config();
@@ -113,6 +113,7 @@ int main(int argc, char **argv)
 	unsigned int occupied = util_percent*lastLBA/100;
 	unsigned int i=0;
 	unsigned int location = 0;
+	/*
 	for (i = 0; i < occupied; i++)
 	{
 		write_complete = false;
@@ -135,6 +136,7 @@ int main(int argc, char **argv)
 		}
 		addresses.insert(location);
 	}
+	*/
 	initial_delay = write_end_time;
 	printf("Completed\n");
 	fflush(stdout);
@@ -188,10 +190,10 @@ int main(int argc, char **argv)
 		{
 			
 			location = rand()%lastLBA;
-			while(addresses.find(location) == addresses.end())
-			{
-				location = rand()%lastLBA;
-			}
+			//while(addresses.find(location) == addresses.end())
+			//{
+			//	location = rand()%lastLBA;
+			//}
 			result = ssd->event_arrive(READ, location, 1, (double) op_start_time[i], op_complete[i], op_complete_time[i]);
 			if(result == -1)
 			{
@@ -295,10 +297,10 @@ int main(int argc, char **argv)
 		else
 		{
 			location = rand()%lastLBA;
-			while(addresses.find(location) == addresses.end())
-			{
-				location = rand()%lastLBA;
-			}
+			//while(addresses.find(location) == addresses.end())
+			//{
+			//	location = rand()%lastLBA;
+			//}
 			op_addresses[earliest_event_index] = location;
 			printf("[Application] sending a read for %d at time %f\n", op_addresses[earliest_event_index], 
 					op_start_time[earliest_event_index]);
