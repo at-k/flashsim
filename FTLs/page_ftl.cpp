@@ -171,8 +171,8 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller, Ssd &parent):FtlParent(contro
 			break;
 	}
 	log_write_address.valid = NONE;
-	low_watermark = MAX_BLOCKS_PER_GC;
-	//low_watermark = 1;
+	//low_watermark = MAX_BLOCKS_PER_GC;
+	low_watermark = 1;
 
 	ftl_queue_last_bg_event_index = (unsigned int *)malloc(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * sizeof(unsigned int));
 	ftl_queue_has_bg_event = (bool *)malloc(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * sizeof(bool));
@@ -635,9 +635,11 @@ enum status FtlImpl_Page::read(Event &event, bool &op_complete, double &end_time
 	fg_read.op_complete_pointer = &op_complete;
 	fg_read.end_time_pointer = &end_time;
 	fg_read.start_time = event.get_start_time();
-	//printf("READ ");
-	//fg_read.physical_address.print();
-	//printf(" %f\n", fg_read.start_time);
+	fg_read.update_plane_priority = false;
+	fg_read.plane_priority = false;
+	printf("READ ");
+	fg_read.physical_address.print();
+	printf(" %f\n", fg_read.start_time);
 	if(READ_PREFERENCE)
 	{
 		//if(fg_read.start_time < plane_free_times[plane_num].first)
@@ -715,6 +717,8 @@ enum status FtlImpl_Page::write(Event &event, bool &op_complete, double &end_tim
 	fg_write.op_complete_pointer = &op_complete;
 	fg_write.end_time_pointer = &end_time;
 	fg_write.start_time = event.get_start_time();
+	fg_write.update_plane_priority = false;
+	fg_write.plane_priority = false;
 	waiting_events_queue.push_back(fg_write);
 	process_waiting_events(event.get_start_time());
 	next_event_time = process_ftl_queues(event);
@@ -941,7 +945,7 @@ enum status FtlImpl_Page::garbage_collect(double time)
 	{
 		return FAILURE;
 	}
-	if(MAX_GC_PLANES > 0 && GC_SCHEME == 1 && total_bg_cleaning_planes > MAX_GC_PLANES)
+	if(MAX_GC_PLANES > 0 && GC_SCHEME == 1 && total_bg_cleaning_planes >= MAX_GC_PLANES)
 	{
 		return FAILURE;
 	}
@@ -1046,6 +1050,7 @@ enum status FtlImpl_Page::garbage_collect_default(double time)
 	unsigned int plane_num = cur_page_address.package*PACKAGE_SIZE*DIE_SIZE + cur_page_address.die*DIE_SIZE + cur_page_address.plane;
 	struct required_bg_events_pointer required_bg_events_location;
 	required_bg_events_location.rw_start_index = background_events[plane_num].size();
+	bool first_event = true;
 	for(unsigned int i=0;i<BLOCK_SIZE;i++)
 	{
 		cur_page_address.page = i;
@@ -1062,6 +1067,17 @@ enum status FtlImpl_Page::garbage_collect_default(double time)
 			bg_read.process = BACKGROUND;
 			bg_read.op_complete_pointer = NULL;
 			bg_read.end_time_pointer = NULL;
+			if(first_event)
+			{
+				bg_read.update_plane_priority = true;
+				bg_read.plane_priority = true;
+				first_event = false;
+			}
+			else
+			{
+				bg_read.update_plane_priority = false;
+				bg_read.plane_priority = true;
+			}
 			background_events[plane_num].push_back(bg_read);
 			struct ftl_event bg_write;
 			bg_write.type = WRITE;
@@ -1072,6 +1088,8 @@ enum status FtlImpl_Page::garbage_collect_default(double time)
 			bg_write.process = BACKGROUND;
 			bg_write.op_complete_pointer = NULL;
 			bg_write.end_time_pointer = NULL;
+			bg_write.update_plane_priority = false;
+			bg_write.plane_priority = true;
 			background_events[plane_num].push_back(bg_write);
 		}
 	}
@@ -1086,6 +1104,8 @@ enum status FtlImpl_Page::garbage_collect_default(double time)
 	bg_erase.process = BACKGROUND;
 	bg_erase.op_complete_pointer = NULL;
 	bg_erase.end_time_pointer = NULL;
+	bg_erase.update_plane_priority = true;
+	bg_erase.plane_priority = false;
 
 	background_events[plane_num].push_back(bg_erase);
 	filled_block_list[plane_num].erase(max_benefit_block_reference);
@@ -1188,6 +1208,7 @@ enum status FtlImpl_Page::garbage_collect_cached(double time)
 	unsigned int target_plane = max_benefit_plane;
 	//printf("GC target plane is %d\n", target_plane);
 
+	bool first_event = true;
 	for(iter = allocated_block_list[target_plane].begin();iter!=allocated_block_list[target_plane].end();iter++)
 	{
 		Address cur_page_address = iter->physical_address;
@@ -1206,6 +1227,17 @@ enum status FtlImpl_Page::garbage_collect_cached(double time)
 				bg_read.process = BACKGROUND;
 				bg_read.op_complete_pointer = NULL;
 				bg_read.end_time_pointer = NULL;
+				if(first_event)
+				{
+					bg_read.update_plane_priority = true;
+					bg_read.plane_priority = true;
+					first_event = false;
+				}
+				else
+				{
+					bg_read.update_plane_priority = false;
+					bg_read.plane_priority = true;
+				}
 				background_events[target_plane].push_back(bg_read);
 			}
 		}
@@ -1223,6 +1255,7 @@ enum status FtlImpl_Page::garbage_collect_cached(double time)
 	struct required_bg_events_pointer required_bg_events_location[num_blocks_to_gc];
 	unsigned int cur_block_to_gc_num = 0;
 
+	std::vector<struct ftl_event> write_events;
 
 	//TODO this can be optimized in terms of runtime because we already know the indexes which correspond to the target plane
 	for(iter = filled_block_list[target_plane].begin();iter!=filled_block_list[target_plane].end();iter++)
@@ -1251,6 +1284,17 @@ enum status FtlImpl_Page::garbage_collect_cached(double time)
 				bg_read.process = BACKGROUND;
 				bg_read.op_complete_pointer = NULL;
 				bg_read.end_time_pointer = NULL;
+				if(first_event)
+				{
+					bg_read.update_plane_priority = true;
+					bg_read.plane_priority = true;
+					first_event = false;
+				}
+				else
+				{
+					bg_read.update_plane_priority = false;
+					bg_read.plane_priority = true;
+				}
 				background_events[target_plane].push_back(bg_read);
 
 				if(schedule_writes)
@@ -1264,7 +1308,10 @@ enum status FtlImpl_Page::garbage_collect_cached(double time)
 					bg_write.process = BACKGROUND;
 					bg_write.op_complete_pointer = NULL;
 					bg_write.end_time_pointer = NULL;
+					bg_write.update_plane_priority = false;
+					bg_write.plane_priority = true;
 					background_events[target_plane].push_back(bg_write);
+					//write_events.push_back(bg_write);
 				}
 			}
 		}
@@ -1274,6 +1321,7 @@ enum status FtlImpl_Page::garbage_collect_cached(double time)
 			cur_block_to_gc_num++;
 		}
 	}
+	background_events[target_plane].insert(background_events[target_plane].end(), write_events.begin(), write_events.end());
 	assert(erase_block_list.size() == 2*num_blocks_to_gc);
 	std::vector<unsigned int>::iterator remove_till = erase_block_list.begin();
 	std::advance(remove_till, num_blocks_to_gc);
@@ -1295,6 +1343,16 @@ enum status FtlImpl_Page::garbage_collect_cached(double time)
 		bg_erase.process = BACKGROUND;
 		bg_erase.op_complete_pointer = NULL;
 		bg_erase.end_time_pointer = NULL;
+		if(cur_block_to_gc_num == num_blocks_to_gc - 1)
+		{
+			bg_erase.update_plane_priority = true;
+			bg_erase.plane_priority = false;
+		}
+		else
+		{
+			bg_erase.update_plane_priority = false;
+			bg_erase.plane_priority = true;
+		}
 		background_events[target_plane].push_back(bg_erase);
 		bg_cleaning_blocks[target_plane].push_back(erase_block);
 		//printf("GC'ed ");
@@ -1352,6 +1410,8 @@ double FtlImpl_Page::process_background_tasks(Event &event)
 			bool perform_first_task = true;
 			if(first_event.type != ERASE)
 				continuous_erases = false;
+			if(first_event.update_plane_priority && first_event.plane_priority)
+				ssd.cache.add_priority_plane(plane_num);
 			if(first_event.type == READ)
 			{
 				if(!(logical_page_list[first_event.logical_address].physical_address == first_event.physical_address))
@@ -1413,10 +1473,6 @@ double FtlImpl_Page::process_background_tasks(Event &event)
 			e.set_address(candidate_address);
 			if(perform_first_task && !(urgent_cleaning && first_event.type == WRITE ))
 			{
-				//TODO: It might be a better idea to set priority plane only before dispatching the event
-				//from process_ftl_queues, just as removal of priority planes is done from there
-				if(first)
-					ssd.cache.add_priority_plane(plane_num);
 				bool is_erase = false;
 				if(first_event.type == READ)
 				{
@@ -1510,8 +1566,9 @@ double FtlImpl_Page::process_background_tasks(Event &event)
 					//printf("\n");
 					controller.issue(e);
 					first_event.end_time = e.get_total_time();
-					continuous_erases = true;
-					plane_prioritized_till[plane_num] = first_event.end_time;
+					//continuous_erases = true;
+					if(first_event.update_plane_priority && !first_event.plane_priority)
+						plane_prioritized_till[plane_num] = first_event.end_time;
 					
 					/*
 					first_event.end_time = plane_free_times[plane_num] + BLOCK_ERASE_DELAY;
@@ -1607,8 +1664,9 @@ bool FtlImpl_Page::queue_required_bg_events(double time, bool necessary)
 		if(required_bg_events[plane_num].size() == 0)
 			continue;
 		
-		unsigned int num_ops = required_bg_events[plane_num].front().rw_end_index - required_bg_events[plane_num].front().rw_start_index;
-		double time_required = num_ops * (PAGE_READ_DELAY + PAGE_WRITE_DELAY) + plane_free_times[plane_num].second;
+		//unsigned int num_ops = required_bg_events[plane_num].front().rw_end_index - required_bg_events[plane_num].front().rw_start_index;
+		//double time_required = num_ops * (PAGE_READ_DELAY + PAGE_WRITE_DELAY) + plane_free_times[plane_num].second;
+		double time_required = (double) required_bg_events[plane_num].front().erase_index;
 		insert_location_iter = plane_sequence.begin();
 		while(insert_location_iter != plane_sequence.end() && (*insert_location_iter).second < time_required)
 		{
@@ -1748,16 +1806,12 @@ bool FtlImpl_Page::queue_required_bg_events(double time, bool necessary)
 		//while(background_events[plane_num].size() > 0 && urgent_cleaning)
 		for(;bg_events_iter != background_events[plane_num].end();)
 		{
-			//TODO: It might be a better idea to set priority plane only before dispatching the event
-			//from process_ftl_queues, just as removal of priority planes is done from there
-			if(first)
-				ssd.cache.add_priority_plane(plane_num);
 			//struct ftl_event first_event = cur_plane_bg_events.front();
 			//struct ftl_event first_event = background_events[plane_num].front();
 			struct ftl_event first_event = *bg_events_iter;
 			if(first_event.start_time < time)
 				first_event.start_time = time;
-			if(queue_erases && first_event.type != ERASE)
+			if(queue_erases && first_event.type == WRITE)
 			{
 				queue_erases_offset++;
 				bg_events_iter++;
@@ -1797,7 +1851,10 @@ bool FtlImpl_Page::queue_required_bg_events(double time, bool necessary)
 				ftl_queue_last_bg_event_index[plane_num] = ftl_queues[plane_num].size();
 				ftl_queues[plane_num].push_back(urgent_bg_read);
 				last_plane_num = plane_num;
-				move_required_pointers(plane_num, 0, 1);
+				if(!queue_erases)
+					move_required_pointers(plane_num, 0, 1);
+				else
+					move_required_pointers(plane_num, queue_erases_offset, queue_erases_offset + 1);
 				//printf("Read from ");
 				//first_event.physical_address.print();
 				//printf("\n");
@@ -1818,9 +1875,9 @@ bool FtlImpl_Page::queue_required_bg_events(double time, bool necessary)
 					//MAX_GC_PLANES = 0;
 					//if(MAX_GC_BLOCKS < SSD_SIZE*PACKAGE_SIZE*DIE_SIZE*MAX_BLOCKS_PER_GC)
 					//	MAX_GC_BLOCKS = SSD_SIZE*PACKAGE_SIZE*DIE_SIZE*MAX_BLOCKS_PER_GC;
-					printf("This is the problem\n");
-					//continue;	
-					break;
+					//printf("This is the problem\n");
+					continue;	
+					//break;
 				}
 				//if(!write_address_already_open && !max_benefit_plane)
 				//{
@@ -1928,7 +1985,7 @@ bool FtlImpl_Page::queue_required_bg_events(double time, bool necessary)
 			//	}
 			//}
 			first = false;
-			if(is_erase && bg_events_iter->type == READ)
+			if(is_erase)// && bg_events_iter->type == READ)
 				break;
 		}
 		max_benefit_plane = false;
@@ -1994,6 +2051,8 @@ double FtlImpl_Page::process_ftl_queues(Event &event)
 				struct ftl_event first_event = first_pointer->event;
 				bool requires_processing = true;
 				double next_event_time;
+				if(first_event.update_plane_priority && first_event.plane_priority)
+					ssd.cache.add_priority_plane(plane_num);
 				//printf("%d %d %d\n", plane_num, first_pointer->event.type, first_pointer->event.process);
 				if(	(first_event.type == READ && 
 					!(logical_page_list[first_event.logical_address].physical_address == first_event.physical_address))
@@ -2047,7 +2106,8 @@ double FtlImpl_Page::process_ftl_queues(Event &event)
 						//printf("QUEUE ERASE ");
 						//first_event.physical_address.print();
 						//printf(" %f %f\n", first_event.start_time, first_event.end_time);
-						plane_prioritized_till[plane_num] = next_event_time;
+						if(first_event.update_plane_priority && !first_event.plane_priority)
+							plane_prioritized_till[plane_num] = next_event_time;
 					}
 					else if(first_event.type == READ)
 					{
@@ -2118,13 +2178,13 @@ double FtlImpl_Page::process_ftl_queues(Event &event)
 				if(ftl_queues[plane_num].size() > 0)
 				{
 					first_pointer = *(ftl_queues[plane_num].begin());
-					if(first_event.type == ERASE && first_pointer->event.type == ERASE)
-						first_pointer->event.start_time = first_event.start_time;
-					else
-					{
+					//if(first_event.type == ERASE && first_pointer->event.type == ERASE)
+					//	first_pointer->event.start_time = first_event.start_time;
+					//else
+					//{
 						if(first_pointer->event.start_time < next_event_time)
 							first_pointer->event.start_time = next_event_time;
-					}
+					//}
 					double delay = 0;
 					if(first_pointer->event.type == READ)
 						delay = PAGE_READ_DELAY;

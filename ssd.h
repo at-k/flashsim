@@ -868,9 +868,13 @@ struct ftl_event
 	double start_time;
 	double end_time;
 	enum ftl_event_process process;
-	bool *op_complete_pointer;
+	bool *op_complete_pointer; 
 	double *end_time_pointer;
-	ftl_event():physical_address(), op_complete_pointer(NULL), end_time_pointer(NULL) {}
+	//This field is set and tested only when type is ERASE. This indicates
+	//whether the plane can be removed from priority setting after this erase completes
+	bool update_plane_priority;
+	bool plane_priority;	
+	ftl_event():physical_address(), op_complete_pointer(NULL), end_time_pointer(NULL), update_plane_priority(false) {}
 	ftl_event(const struct ftl_event &e)//:physical_address(e.physical_address)
 	{
 		physical_address = e.physical_address;
@@ -881,6 +885,8 @@ struct ftl_event
 		process = e.process;
 		op_complete_pointer = e.op_complete_pointer;
 		end_time_pointer = e.end_time_pointer;
+		update_plane_priority = e.update_plane_priority;
+		plane_priority = e.plane_priority;
 	}
 	struct ftl_event& operator=(const struct ftl_event &e)
 	{
@@ -892,6 +898,8 @@ struct ftl_event
 		process = e.process;
 		op_complete_pointer = e.op_complete_pointer;
 		end_time_pointer = e.end_time_pointer;
+		update_plane_priority = e.update_plane_priority;
+		plane_priority = e.plane_priority;
 		return *this;
 	}
 };
