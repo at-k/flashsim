@@ -29,13 +29,11 @@ Cache::Cache()
 
 Cache::Cache(const Cache &c)
 {
-	printf("copy constructor called\n");
 	fflush(stdout);
 }
 
 Cache & Cache::operator=(const Cache &c)
 {
-	printf("operator = called\n");
 	fflush(stdout);
 }
 
@@ -224,7 +222,6 @@ void Cache::place_in_cache(Event &event)
 				cc++;
 			}
 			*/
-			printf("Evicting %d %f %d\n", cached_pages[evict_index].evict_priority, cached_pages[evict_index].time, cached_pages[evict_index].logical_address);
 			//printf("%d %d\n", logical_address_map.size(), eviction_map.size());
 		}
 		else

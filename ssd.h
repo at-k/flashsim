@@ -992,12 +992,16 @@ private:
 	std::vector< std::vector<struct ssd_block> >bg_cleaning_blocks;
 	std::vector< std::vector<struct required_bg_events_pointer> >required_bg_events;
 	std::vector<std::pair<double, double>>plane_free_times;
+	std::vector<std::list<struct ssd_block>> free_block_list;
+	std::vector<std::list<struct ssd_block>> allocated_block_list;
+	std::vector<std::list<struct ssd_block>> filled_block_list;
+
+	std::list<std::pair<std::list<struct ssd_block>::iterator, double>> target_blocks;
+	std::list<std::pair<unsigned int, double>> target_planes;
+	unsigned int target_selection_delay;
 	std::vector<struct ftl_event> waiting_events_queue;
 
 	struct logical_page *logical_page_list;
-	std::list<struct ssd_block> free_block_list;
-	std::list<struct ssd_block> allocated_block_list;
-	std::list<struct ssd_block> filled_block_list;
 	Address log_write_address;
 	unsigned int low_watermark;
 
