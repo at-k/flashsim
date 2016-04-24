@@ -637,9 +637,9 @@ enum status FtlImpl_Page::read(Event &event, bool &op_complete, double &end_time
 	fg_read.start_time = event.get_start_time();
 	fg_read.update_plane_priority = false;
 	fg_read.plane_priority = false;
-	printf("READ ");
-	fg_read.physical_address.print();
-	printf(" %f\n", fg_read.start_time);
+	//printf("READ ");
+	//fg_read.physical_address.print();
+	//printf(" %f\n", fg_read.start_time);
 	if(READ_PREFERENCE)
 	{
 		//if(fg_read.start_time < plane_free_times[plane_num].first)

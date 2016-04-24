@@ -50,10 +50,10 @@ bool Cache::present_in_cache(Event &event)
 	iter = logical_address_map.find(logical_add);
 	Address event_address = event.get_address();
 	bool ret_val = iter != logical_address_map.end() && cached_pages[iter->second].physical_address == event_address;
-	printf("Searching for %d. Found %d %d\n", logical_add, ret_val, iter!=logical_address_map.end());
-	printf("Event add ");
-	event_address.print();
-	printf("\n");
+	//printf("Searching for %d. Found %d %d\n", logical_add, ret_val, iter!=logical_address_map.end());
+	//printf("Event add ");
+	//event_address.print();
+	//printf("\n");
 	return ret_val;
 }
 
@@ -97,13 +97,13 @@ void Cache::place_in_cache(Event &event)
 			
 			if(cached_pages[evict_index].evict_priority && !priority_page)
 			{
-				printf("Won't evict a priority page for a non priority page\n");
+				//printf("Won't evict a priority page for a non priority page\n");
 				return;
 			}
 			
-			printf("Removing %d from the map again priority was %d ", cached_pages[evict_index].logical_address, cached_pages[evict_index].evict_priority);
-			cached_pages[evict_index].physical_address.print();
-			printf("\n");
+			//printf("Removing %d from the map again priority was %d ", cached_pages[evict_index].logical_address, cached_pages[evict_index].evict_priority);
+			//cached_pages[evict_index].physical_address.print();
+			//printf("\n");
 			logical_address_map.erase(cached_pages[evict_index].logical_address);
 			eviction_map.erase(eviction_map.begin());
 		}
@@ -132,9 +132,9 @@ void Cache::place_in_cache(Event &event)
 	eviction_map.insert(std::pair<std::pair<bool, double>, unsigned int>(std::pair<bool, double>(cached_pages[evict_index].evict_priority, cached_pages[evict_index].time), evict_index));
 	
 
-	printf("Adding %d at %f with %d for ", cached_pages[evict_index].logical_address, cached_pages[evict_index].time, cached_pages[evict_index].evict_priority);
-	cached_pages[evict_index].physical_address.print();
-	printf("\n");
+	//printf("Adding %d at %f with %d for ", cached_pages[evict_index].logical_address, cached_pages[evict_index].time, cached_pages[evict_index].evict_priority);
+	//cached_pages[evict_index].physical_address.print();
+	//printf("\n");
 }
 
 bool Cache::add_priority_plane(unsigned int plane_num)
