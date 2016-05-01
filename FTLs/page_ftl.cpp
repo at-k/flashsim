@@ -26,8 +26,8 @@
 #include "../ssd.h"
 
 
-unsigned int app_writes = 0;
-unsigned int total_writes = 0;
+unsigned int pbt_called_count = 0;
+unsigned int pbt_blocked_count = 0;
 
 using namespace ssd;
 
@@ -571,6 +571,7 @@ void FtlImpl_Page::get_min_max_erases()
 	}
 	controller.stats.minErase = min_erases;
 	controller.stats.maxErase = max_erases;
+	printf("pbt called %d blocked %d\n", pbt_called_count, pbt_blocked_count);
 }
 FtlImpl_Page::~FtlImpl_Page(void)
 {
@@ -794,7 +795,6 @@ void FtlImpl_Page::process_waiting_events(double time)
 		std::vector<struct queued_ftl_event *>::iterator insert_location = find_location.base();
 		stalled_fg_write->predecessor_completed = insert_location == ftl_queues[plane_num].begin() ? true : false;
 		ftl_queues[plane_num].insert(find_location.base(), stalled_fg_write);
-		app_writes++;
 		if(gc_required)
 		{
 			bool gc_ret = garbage_collect(fg_write.start_time);
@@ -917,7 +917,6 @@ double FtlImpl_Page::write_(Event &event)
 	(*log_write_iter).page_mapping[write_address.page] = logical_page_num;  
 	mark_reserved(write_address, false);
 	(*log_write_iter).page_to_write = write_address.page + 1;
-	total_writes++;
 	return event.get_total_time();
 }
 
@@ -1257,9 +1256,9 @@ enum status FtlImpl_Page::garbage_collect_cached(double time)
 
 	std::vector<struct ftl_event> write_events;
 
-	//TODO this can be optimized in terms of runtime because we already know the indexes which correspond to the target plane
 	for(iter = filled_block_list[target_plane].begin();iter!=filled_block_list[target_plane].end();iter++)
 	{
+		printf("here\n");
 		bool schedule_writes = false;
 		if(std::find(erase_block_list.begin(), erase_block_list.end(), std::distance(filled_block_list[target_plane].begin(), iter)) != erase_block_list.end()	
 			)  
@@ -1380,6 +1379,7 @@ enum status FtlImpl_Page::garbage_collect_cached(double time)
 
 double FtlImpl_Page::process_background_tasks(Event &event)
 {
+	pbt_called_count++;
 	double ret_time = std::numeric_limits<double>::max();
 	double cur_simulated_time = event.get_start_time();
 	bool urgent_cleaning = false;
@@ -1467,6 +1467,7 @@ double FtlImpl_Page::process_background_tasks(Event &event)
 				first_event.start_time = plane_free_times[candidate_plane].first;
 			if(first_event.start_time > cur_simulated_time)
 			{
+				pbt_blocked_count++;
 				perform_first_task = false;
 			}
 			Event e(first_event.type, first_event.logical_address, 1, first_event.start_time);
@@ -2168,8 +2169,10 @@ double FtlImpl_Page::process_ftl_queues(Event &event)
 							first_pointer->child->event.start_time = next_event_time;
 					}
 				}
-
-				plane_free_times[plane_num].first = next_event_time;
+				if(plane_free_times[plane_num].first < next_event_time)
+				{
+					plane_free_times[plane_num].first = next_event_time;
+				}
 				delete (first_pointer);
 				first_pointer = NULL;
 				ftl_queues[plane_num].erase(ftl_queues[plane_num].begin());

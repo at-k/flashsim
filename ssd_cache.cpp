@@ -24,7 +24,7 @@ Cache::Cache()
 	{
 		cached_pages[i].physical_address.valid = NONE;
 	}
-
+	insert_at_location = 0;
 }
 
 Cache::Cache(const Cache &c)
@@ -110,14 +110,16 @@ void Cache::place_in_cache(Event &event)
 		else
 		{
 			//TODO: this can be made faster by maintaining a pointer to the last empty index
-			for(unsigned int i=0;i<size;i++)
-			{
-				if(cached_pages[i].physical_address.valid == NONE)
-				{
-					evict_index = i;
-					break;
-				}
-			}
+			//for(unsigned int i=0;i<size;i++)
+			//{
+			//	if(cached_pages[i].physical_address.valid == NONE)
+			//	{
+			//		evict_index = i;
+			//		break;
+			//	}
+			//}
+			evict_index = insert_at_location;
+			insert_at_location++;
 		}
 	}
 	assert(evict_index != size);

@@ -976,6 +976,7 @@ private:
 	std::multimap<std::pair<bool, double>, unsigned int, CompareCacheEntries> eviction_map;
 	std::vector<unsigned int> priority_planes;
 	struct cache_entry *cached_pages;
+	unsigned int insert_at_location;
 };
 
 
@@ -1007,7 +1008,7 @@ private:
 	std::list<std::pair<std::list<struct ssd_block>::iterator, double>> target_blocks;
 	std::list<std::pair<unsigned int, double>> target_planes;
 	unsigned int target_selection_delay;
-	std::vector<struct ftl_event> waiting_events_queue;
+	std::list<struct ftl_event> waiting_events_queue;
 
 	struct logical_page *logical_page_list;
 	Address log_write_address;
