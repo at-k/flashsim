@@ -193,13 +193,13 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller, Ssd &parent):FtlParent(contro
 	next_event_time = -1;
 	target_selection_delay = 0;
 	
-	for(unsigned int i=0;i<SSD_SIZE * PACKAGE_SIZE * DIE_SIZE;i++)
-	{
-		background_events[i].reserve(BLOCK_SIZE * PLANE_SIZE);
+	//for(unsigned int i=0;i<SSD_SIZE * PACKAGE_SIZE * DIE_SIZE;i++)
+	//{
+		//background_events[i].reserve(BLOCK_SIZE * PLANE_SIZE);
 		//bg_cleaning_blocks[i].reserve(PLANE_SIZE);
 		//required_bg_events[i].reserve(BLOCK_SIZE);
 		//ftl_queues[i].reserve(BLOCK_SIZE);
-	}
+	//}
 }
 
 unsigned int FtlImpl_Page::get_next_block_lba(unsigned int lba)
@@ -560,7 +560,7 @@ void FtlImpl_Page::get_min_max_erases()
 			if(erases > max_erases)
 				max_erases = erases;	
 		}
-		for(std::vector<struct ssd_block>::iterator i=bg_cleaning_blocks[k].begin();i!=bg_cleaning_blocks[k].end();i++)
+		for(std::list<struct ssd_block>::iterator i=bg_cleaning_blocks[k].begin();i!=bg_cleaning_blocks[k].end();i++)
 		{
 			unsigned int erases = BLOCK_ERASES - (*i).lifetime_left;
 			if(erases < min_erases)
@@ -584,7 +584,7 @@ FtlImpl_Page::~FtlImpl_Page(void)
 		bg_cleaning_blocks[l].clear();
 		required_bg_events[l].clear();
 		background_events[l].clear();
-		std::vector<struct queued_ftl_event *>::iterator i;
+		std::list<struct queued_ftl_event *>::iterator i;
 		for(i=ftl_queues[l].begin();i!=ftl_queues[l].end();i++)
 		{
 			delete (*i);
@@ -652,7 +652,7 @@ enum status FtlImpl_Page::read(Event &event, bool &op_complete, double &end_time
 		stalled_fg_read->event = fg_read;
 		stalled_fg_read->child = NULL;
 		stalled_fg_read->parent_completed = true;
-		std::vector<struct queued_ftl_event *>::iterator find_location = ftl_queues[plane_num].begin();
+		std::list<struct queued_ftl_event *>::iterator find_location = ftl_queues[plane_num].begin();
 		int counter = 0;
 		while(find_location != ftl_queues[plane_num].end() && (*find_location)->event.type == READ && (*find_location)->event.process == FOREGROUND)
 		{
@@ -779,22 +779,22 @@ void FtlImpl_Page::process_waiting_events(double time)
 		stalled_fg_write->child = NULL;
 		stalled_fg_write->parent_completed = true;
 		stalled_fg_write->write_from_address = logical_page_list[fg_write.logical_address].physical_address; 
-		std::vector<struct queued_ftl_event *>::reverse_iterator find_location = ftl_queues[plane_num].rbegin();
+		std::list<struct queued_ftl_event *>::reverse_iterator find_location = ftl_queues[plane_num].rbegin();
 		while(find_location != ftl_queues[plane_num].rend() && (*find_location)->event.process == BACKGROUND)
 		{
-			if(wait_for_erase)
-			{
-				struct queued_ftl_event *check_event = (*((find_location+1).base()));
-				if(check_event->event.type == ERASE && check_event->event.physical_address == log_write_block_address)
-				{
-					break;
-				}
-			}
+			//if(wait_for_erase)
+			//{
+			//	struct queued_ftl_event *check_event = (*((find_location+1).base()));
+			//	if(check_event->event.type == ERASE && check_event->event.physical_address == log_write_block_address)
+			//	{
+			//		break;
+			//	}
+			//}
 			find_location++;
 		}
-		std::vector<struct queued_ftl_event *>::iterator insert_location = find_location.base();
+		std::list<struct queued_ftl_event *>::iterator insert_location = find_location.base();
 		stalled_fg_write->predecessor_completed = insert_location == ftl_queues[plane_num].begin() ? true : false;
-		ftl_queues[plane_num].insert(find_location.base(), stalled_fg_write);
+		ftl_queues[plane_num].insert(insert_location, stalled_fg_write);
 		if(gc_required)
 		{
 			bool gc_ret = garbage_collect(fg_write.start_time);
@@ -864,7 +864,7 @@ double FtlImpl_Page::write_(Event &event)
 	}
 	if(need_invalidation)
 	{
-		std::vector<struct ssd_block>::iterator bg_iter;
+		std::list<struct ssd_block>::iterator bg_iter;
 		for(bg_iter=bg_cleaning_blocks[current_mapped_plane].begin();bg_iter!=bg_cleaning_blocks[current_mapped_plane].end();bg_iter++)
 		{
 			if(bg_iter->physical_address == currently_mapped_block_address)
@@ -1254,11 +1254,10 @@ enum status FtlImpl_Page::garbage_collect_cached(double time)
 	struct required_bg_events_pointer required_bg_events_location[num_blocks_to_gc];
 	unsigned int cur_block_to_gc_num = 0;
 
-	std::vector<struct ftl_event> write_events;
+	//std::vector<struct ftl_event> write_events;
 
 	for(iter = filled_block_list[target_plane].begin();iter!=filled_block_list[target_plane].end();iter++)
 	{
-		printf("here\n");
 		bool schedule_writes = false;
 		if(std::find(erase_block_list.begin(), erase_block_list.end(), std::distance(filled_block_list[target_plane].begin(), iter)) != erase_block_list.end()	
 			)  
@@ -1320,7 +1319,7 @@ enum status FtlImpl_Page::garbage_collect_cached(double time)
 			cur_block_to_gc_num++;
 		}
 	}
-	background_events[target_plane].insert(background_events[target_plane].end(), write_events.begin(), write_events.end());
+	//background_events[target_plane].insert(background_events[target_plane].end(), write_events.begin(), write_events.end());
 	assert(erase_block_list.size() == 2*num_blocks_to_gc);
 	std::vector<unsigned int>::iterator remove_till = erase_block_list.begin();
 	std::advance(remove_till, num_blocks_to_gc);
@@ -1516,7 +1515,7 @@ double FtlImpl_Page::process_background_tasks(Event &event)
 					prev_block_address.page = 0;
 					prev_block_address.valid = BLOCK;
 					
-					std::vector<struct ssd_block>::iterator prev_block_iter = bg_cleaning_blocks[plane_num].begin();
+					std::list<struct ssd_block>::iterator prev_block_iter = bg_cleaning_blocks[plane_num].begin();
 					for(;prev_block_iter != bg_cleaning_blocks[plane_num].end();prev_block_iter++)
 					{
 						if(prev_block_iter->physical_address ==	prev_block_address)
@@ -1803,7 +1802,7 @@ bool FtlImpl_Page::queue_required_bg_events(double time, bool necessary)
 		Address queue_erases_upto;
 		queue_erases_upto.valid = NONE;
 		unsigned int queue_erases_offset = 0;
-		std::vector<struct ftl_event>::iterator bg_events_iter = background_events[plane_num].begin();
+		std::list<struct ftl_event>::iterator bg_events_iter = background_events[plane_num].begin();
 		//while(background_events[plane_num].size() > 0 && urgent_cleaning)
 		for(;bg_events_iter != background_events[plane_num].end();)
 		{
@@ -1900,7 +1899,7 @@ bool FtlImpl_Page::queue_required_bg_events(double time, bool necessary)
 				urgent_bg_write->parent_completed = first ? true : false;
 				if(!first)
 				{
-					std::vector<struct queued_ftl_event *>::iterator last_iterator = ftl_queues[last_plane_num].end();
+					std::list<struct queued_ftl_event *>::iterator last_iterator = ftl_queues[last_plane_num].end();
 					--last_iterator;
 					struct queued_ftl_event *last_event = *(last_iterator);
 					last_event->child = urgent_bg_write;
@@ -2016,7 +2015,7 @@ double FtlImpl_Page::process_ftl_queues(Event &event)
 				continue;
 			}
 			//printf("FTLQ %d %d\n", plane_num, ftl_queues[plane_num].size());
-			std::vector<struct queued_ftl_event *>::iterator first_iterator = ftl_queues[plane_num].begin();
+			std::list<struct queued_ftl_event *>::iterator first_iterator = ftl_queues[plane_num].begin();
 			struct queued_ftl_event *first_pointer = *(first_iterator);
 			first_iterator = ftl_queues[plane_num].begin();
 
@@ -2025,7 +2024,7 @@ double FtlImpl_Page::process_ftl_queues(Event &event)
 			if(first_pointer->event.type == ERASE)
 			{
 				Address erase_address = first_pointer->event.physical_address;
-				std::vector<struct ssd_block>::iterator bg_iter;
+				std::list<struct ssd_block>::iterator bg_iter;
 				for(bg_iter=bg_cleaning_blocks[plane_num].begin();bg_iter!=bg_cleaning_blocks[plane_num].end();bg_iter++)
 				{
 					if(bg_iter->physical_address == erase_address)
@@ -2127,7 +2126,7 @@ double FtlImpl_Page::process_ftl_queues(Event &event)
 						prev_block_address.page = 0;
 						prev_block_address.valid = BLOCK;
 						unsigned int prev_plane = prev_block_address.package*PACKAGE_SIZE*DIE_SIZE + prev_block_address.die*DIE_SIZE + prev_block_address.plane;
-						std::vector<struct ssd_block>::iterator prev_block_iter = bg_cleaning_blocks[prev_plane].begin();
+						std::list<struct ssd_block>::iterator prev_block_iter = bg_cleaning_blocks[prev_plane].begin();
 						for(;prev_block_iter != bg_cleaning_blocks[prev_plane].end();prev_block_iter++)
 						{
 							if(prev_block_iter->physical_address ==	prev_block_address)
@@ -2218,7 +2217,7 @@ double FtlImpl_Page::process_ftl_queues(Event &event)
 					if(first_pointer->event.type == ERASE)
 					{
 						Address erase_address = first_pointer->event.physical_address;
-						std::vector<struct ssd_block>::iterator bg_iter = bg_cleaning_blocks[plane_num].begin();
+						std::list<struct ssd_block>::iterator bg_iter = bg_cleaning_blocks[plane_num].begin();
 						for(;bg_iter!=bg_cleaning_blocks[plane_num].end();bg_iter++)
 						{
 							if(bg_iter->physical_address == erase_address)
@@ -2253,7 +2252,7 @@ double FtlImpl_Page::process_ftl_queues(Event &event)
 void FtlImpl_Page::move_required_pointers(unsigned int plane_num, unsigned int start, unsigned int end)
 {
 	unsigned int offset = end - start;
-	std::vector<struct required_bg_events_pointer>::iterator urgent_pointer;
+	std::list<struct required_bg_events_pointer>::iterator urgent_pointer;
 	//printf("Moving pointers for plane %d\n", plane_num);
 	for(urgent_pointer=required_bg_events[plane_num].begin();urgent_pointer!=required_bg_events[plane_num].end();urgent_pointer++)
 	{

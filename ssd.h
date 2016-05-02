@@ -996,10 +996,10 @@ private:
 	unsigned int RAW_SSD_BLOCKS, ADDRESSABLE_SSD_PAGES;
 	unsigned int clean_threshold;
 	bool READ_PREFERENCE;
-	std::vector< std::vector<struct ftl_event> >background_events;
-	std::vector< std::vector<struct queued_ftl_event *> >ftl_queues;
-	std::vector< std::vector<struct ssd_block> >bg_cleaning_blocks;
-	std::vector< std::vector<struct required_bg_events_pointer> >required_bg_events;
+	std::vector< std::list<struct ftl_event> >background_events;
+	std::vector< std::list<struct queued_ftl_event *> >ftl_queues;
+	std::vector< std::list<struct ssd_block> >bg_cleaning_blocks;
+	std::vector< std::list<struct required_bg_events_pointer> >required_bg_events;
 	std::vector<std::pair<double, double>>plane_free_times;
 	std::vector<std::list<struct ssd_block>> free_block_list;
 	std::vector<std::list<struct ssd_block>> allocated_block_list;
