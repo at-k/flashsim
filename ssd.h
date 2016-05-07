@@ -812,13 +812,11 @@ struct logical_page
 struct ssd_block
 {
 	Address physical_address;
-//	unsigned int last_write_time;
 	unsigned int valid_page_count;
 	unsigned int lifetime_left;
 	unsigned int *page_mapping;
 	unsigned int reserved_page_count;
 	unsigned int page_to_write;
-	bool scheduled_for_erasing;
 	double page_copy_complete_time;
 	ssd_block():physical_address(), page_mapping(NULL), reserved_page_count(0) {}
 	ssd_block(const struct ssd_block &b):physical_address(b.physical_address)
@@ -826,7 +824,6 @@ struct ssd_block
 		valid_page_count = b.valid_page_count;
 		lifetime_left = b.lifetime_left;
 		page_to_write = b.page_to_write;
-		scheduled_for_erasing = b.scheduled_for_erasing;
 		page_copy_complete_time = b.page_copy_complete_time;
 		page_mapping = (unsigned int *)malloc(BLOCK_SIZE*sizeof(unsigned int));
 		for(unsigned int i=0;i<BLOCK_SIZE;i++)
@@ -841,7 +838,6 @@ struct ssd_block
 		valid_page_count = b.valid_page_count;
 		lifetime_left = b.lifetime_left;
 		page_to_write = b.page_to_write;
-		scheduled_for_erasing = b.scheduled_for_erasing;
 		page_copy_complete_time = b.page_copy_complete_time;
 		page_mapping = (unsigned int *)malloc(BLOCK_SIZE*sizeof(unsigned int));
 		for(unsigned int i=0;i<BLOCK_SIZE;i++)
