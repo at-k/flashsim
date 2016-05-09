@@ -38,7 +38,7 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller, Ssd &parent):FtlParent(contro
 	gc_required(false),
 	RAW_SSD_BLOCKS(SSD_SIZE*PACKAGE_SIZE*DIE_SIZE*PLANE_SIZE),
 	ADDRESSABLE_SSD_PAGES(NUMBER_OF_ADDRESSABLE_BLOCKS * BLOCK_SIZE),
-	clean_threshold(((SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * PLANE_SIZE) - NUMBER_OF_ADDRESSABLE_BLOCKS)),
+	clean_threshold(((SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * PLANE_SIZE) - NUMBER_OF_ADDRESSABLE_BLOCKS)/2),
 	READ_PREFERENCE(true),
 	//open_events(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE), 
 	background_events(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE), 
@@ -175,7 +175,7 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller, Ssd &parent):FtlParent(contro
 	}
 	log_write_address.valid = NONE;
 	//low_watermark = MAX_BLOCKS_PER_GC;
-	low_watermark = 1;
+	low_watermark = SSD_SIZE*PACKAGE_SIZE*DIE_SIZE;
 
 	ftl_queue_last_bg_event_index = (unsigned int *)malloc(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * sizeof(unsigned int));
 	ftl_queue_has_bg_event = (bool *)malloc(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * sizeof(bool));
@@ -502,6 +502,9 @@ bool FtlImpl_Page::allocate_new_block(Address requested_address)
 		log_write_address.valid = PAGE;
 		ret_val = true;
 	}
+	printf("Allocated a new block ");
+	log_write_address.print();
+	printf(" and now free blocks are %d\n", free_blocks - 1);
 	return ret_val;
 }
 
@@ -563,7 +566,7 @@ void FtlImpl_Page::get_min_max_erases()
 	}
 	controller.stats.minErase = min_erases;
 	controller.stats.maxErase = max_erases;
-	printf("pbt called %d blocked %d\n", pbt_called_count, pbt_blocked_count);
+	//printf("pbt called %d blocked %d\n", pbt_called_count, pbt_blocked_count);
 }
 FtlImpl_Page::~FtlImpl_Page(void)
 {
@@ -680,35 +683,35 @@ enum status FtlImpl_Page::noop(Event &event, bool &op_complete, double &end_time
 {
 	double e_time = std::numeric_limits<double>::max();
 	unset_plane_priorities(event.get_start_time());
-	printf("noop calls process waiting events\n");
+	//printf("noop calls process waiting events\n");
 	process_waiting_events(event.get_start_time());
 	next_event_time = process_ftl_queues(event);
 	bg_events_time = process_background_tasks(event);
-	printf("noop calls process waiting events again\n");
+	//printf("noop calls process waiting events again\n");
 	process_waiting_events(event.get_start_time());
 	next_event_time = process_ftl_queues(event);
 	e_time = next_event_time < e_time ? next_event_time : e_time;
 	event.incr_time_taken(e_time - event.get_start_time());
 	end_time = e_time;
 	op_complete = true;
-	printf("NOOP returning with time ");
-	if(end_time == std::numeric_limits<double>::max())
-		printf("MAX");
-	else
-		printf("%f", end_time);
-	printf("\n");
+	//printf("NOOP returning with time ");
+	//if(end_time == std::numeric_limits<double>::max())
+	//	printf("MAX");
+	//else
+	//	printf("%f", end_time);
+	//printf("\n");
 	return SUCCESS;
 }
 
 enum status FtlImpl_Page::write(Event &event, bool &op_complete, double &end_time)
 {
-	unsigned int free_blocks = 0;	
-	for(unsigned int i=0;i<SSD_SIZE*PACKAGE_SIZE*DIE_SIZE;i++)
-	{
-		free_blocks += free_block_list[i].size();
-	}
-	printf("Write %d called with free blocks %d\n", write_num, free_blocks);
-	write_num++;
+	//unsigned int free_blocks = 0;	
+	//for(unsigned int i=0;i<SSD_SIZE*PACKAGE_SIZE*DIE_SIZE;i++)
+	//{
+	//	free_blocks += free_block_list[i].size();
+	//}
+	//printf("Write %d called with free blocks %d\n", write_num, free_blocks);
+	//write_num++;
 	unset_plane_priorities(event.get_start_time());
 	next_event_time = process_ftl_queues(event);
 	bg_events_time = process_background_tasks(event);
@@ -746,13 +749,13 @@ void FtlImpl_Page::process_waiting_events(double time)
 		{
 			if(garbage_collect(fg_write.start_time))
 			{
-				printf("calling queue for a failed write ");
+				//printf("calling queue for a failed write ");
 				bool queue_ret_val = queue_required_bg_events(fg_write.start_time, true);
-				printf("which returned %d\n", queue_ret_val);
+				//printf("which returned %d\n", queue_ret_val);
 			}
 			break; 
 		} 
-		printf("processing write %d\n", process_write_num);
+		printf("processing write %d with free blocks %d\n", process_write_num, pre_free_blocks);
 		process_write_num++;
 		Address log_write_block_address = log_write_address;
 		log_write_block_address.page = 0;
@@ -805,7 +808,7 @@ void FtlImpl_Page::process_waiting_events(double time)
 			}
 			if(free_blocks < low_watermark && free_blocks < pre_free_blocks) 
 			{
-				printf("calling queue for a succesful write\n");
+				//printf("calling queue for a succesful write\n");
 				queue_required_bg_events(fg_write.start_time, true);
 			}
 		}
@@ -928,7 +931,7 @@ enum status FtlImpl_Page::garbage_collect(double time)
 	{
 		return FAILURE;
 	}
-	if(MAX_GC_PLANES > 0 && GC_SCHEME == 1 && total_bg_cleaning_planes >= MAX_GC_PLANES)
+	if(MAX_GC_PLANES > 0 && total_bg_cleaning_planes >= MAX_GC_PLANES && GC_SCHEME == 1)
 	{
 		return FAILURE;
 	}
@@ -1230,6 +1233,7 @@ enum status FtlImpl_Page::garbage_collect_cached(double time)
 	struct required_bg_events_pointer required_bg_events_location[num_blocks_to_gc];
 	unsigned int cur_block_to_gc_num = 0;
 
+	std::list<struct ftl_event> write_events;
 
 	for(iter = filled_block_list[target_plane].begin();iter!=filled_block_list[target_plane].end();iter++)
 	{
@@ -1283,7 +1287,8 @@ enum status FtlImpl_Page::garbage_collect_cached(double time)
 					bg_write.end_time_pointer = NULL;
 					bg_write.update_plane_priority = false;
 					bg_write.plane_priority = true;
-					background_events[target_plane].push_back(bg_write);
+					//background_events[target_plane].push_back(bg_write);
+					write_events.push_back(bg_write);
 				}
 			}
 		}
@@ -1300,6 +1305,11 @@ enum status FtlImpl_Page::garbage_collect_cached(double time)
 	cur_block_to_gc_num = 0;
 	for(;cur_block_to_gc_num < num_blocks_to_gc;cur_block_to_gc_num++)
 	{
+		unsigned int num_pages = required_bg_events_location[cur_block_to_gc_num].rw_end_index;
+		std::list<struct ftl_event>::iterator last_write_pointer = write_events.begin();
+		std::advance(last_write_pointer, num_pages);
+		background_events[target_plane].insert(background_events[target_plane].end(), write_events.begin(), last_write_pointer);
+		write_events.erase(write_events.begin(), last_write_pointer);
 		unsigned int offset = erase_block_list[cur_block_to_gc_num];
 		std::list<struct ssd_block>::iterator erase_block_iterator = filled_block_list[target_plane].begin();
 		std::advance(erase_block_iterator, offset);
@@ -1460,6 +1470,8 @@ double FtlImpl_Page::process_background_tasks(Event &event)
 						free_blocks += free_block_list[p_num].size();
 					}
 					printf("BG WRITE ");
+					first_event.physical_address.print();
+					printf(" ");
 					candidate_address.print();
 					printf("\n");
 					mark_reserved(log_write_address, true);
@@ -1491,7 +1503,6 @@ double FtlImpl_Page::process_background_tasks(Event &event)
 				{
 					printf("BG ERASE ");
 					candidate_address.print();
-					printf("\n");
 					controller.issue(e);
 					first_event.end_time = e.get_total_time();
 					if(first_event.update_plane_priority && !first_event.plane_priority)
@@ -1507,6 +1518,7 @@ double FtlImpl_Page::process_background_tasks(Event &event)
 					{
 						free_blocks += free_block_list[p_num].size();
 					}
+					printf(" and now free blocks are %d\n", free_blocks);
 					if(free_blocks > clean_threshold)
 					{
 						gc_required = false;
@@ -1553,7 +1565,7 @@ double FtlImpl_Page::process_background_tasks(Event &event)
 
 bool FtlImpl_Page::queue_required_bg_events(double time, bool necessary)
 {
-	printf("required queueing called\n");
+	//printf("required queueing called\n");
 	bool urgent_cleaning = true;
 	unsigned int urgent_cleaning_plane;
 	unsigned int min_ops_required = UINT_MAX;
@@ -1968,12 +1980,12 @@ double FtlImpl_Page::process_ftl_queues(Event &event)
 				process_worthy && first_pointer->predecessor_completed)
 			{
 				ret_time = first_pointer->event.start_time;
-				printf("set ret time to ");
-				if(ret_time == std::numeric_limits<double>::max())
-					printf("MAX");
-				else
-					printf("%f", ret_time);
-				printf(" from plane %d\n", plane_num);
+				//printf("set ret time to ");
+				//if(ret_time == std::numeric_limits<double>::max())
+				//	printf("MAX");
+				//else
+				//	printf("%f", ret_time);
+				//printf(" from plane %d\n", plane_num);
 			}
 		}
 	}

@@ -51,7 +51,7 @@ int main(int argc, char **argv)
 	bool write_data;
 	//unsigned int req_per_thread = 1000;
 	
-	unsigned int total_read_count = 600000, cur_read_count = 0;
+	unsigned int total_read_count = 3000000, cur_read_count = 0;
 
 
 	load_config();
@@ -85,7 +85,7 @@ int main(int argc, char **argv)
 	strcat(read_file_name, argv[2]);
 	strcat(read_file_name, "_");
 	strcat(read_file_name, argv[3]);
-	strcat(read_file_name, ".out");
+	strcat(read_file_name, "_sufficient.out");
 
 	strcat(write_file_name, "closed_write_");
 	strcat(write_file_name, ftl_implementation);
@@ -97,7 +97,8 @@ int main(int argc, char **argv)
 	strcat(write_file_name, argv[2]);
 	strcat(write_file_name, "_");
 	strcat(write_file_name, argv[3]);
-	strcat(write_file_name, ".out");
+	strcat(write_file_name, "_sufficient.out");
+
 
 
 	read_file = fopen(read_file_name, "w");
