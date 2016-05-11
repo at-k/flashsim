@@ -51,7 +51,7 @@ int main(int argc, char **argv)
 	bool write_data;
 	//unsigned int req_per_thread = 1000;
 	
-	unsigned int total_read_count = 3000000, cur_read_count = 0;
+	unsigned int total_read_count = 1000000, cur_read_count = 0;
 
 
 	load_config();

@@ -97,7 +97,7 @@ Plane::Plane(const Die &parent, uint plane_size, double reg_read_delay, double r
 	}
 
 
-	timings.reserve(PLANE_SIZE * BLOCK_SIZE);
+	//timings.reserve(PLANE_SIZE * BLOCK_SIZE);
 	return;
 }
 
