@@ -1032,6 +1032,7 @@ private:
 	enum status garbage_collect(double time);
 	enum status garbage_collect_default(double time);
 	enum status garbage_collect_cached(double time);
+	enum status garbage_collect_hot_cached(double time);
 	double process_background_tasks(Event &event);
 	double read_(Event &event);
 	double write_(Event &event);
