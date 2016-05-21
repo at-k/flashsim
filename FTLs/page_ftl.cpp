@@ -49,6 +49,7 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller, Ssd &parent):FtlParent(contro
 	allocated_block_list(SSD_SIZE*PACKAGE_SIZE*DIE_SIZE),
 	free_block_list(SSD_SIZE*PACKAGE_SIZE*DIE_SIZE),
 	filled_block_list(SSD_SIZE*PACKAGE_SIZE*DIE_SIZE)
+	//hot_pages(SSD_SIZE*PACKAGE_SIZE*DIE_SIZE)
 {
 	logical_page_list = new logical_page[ADDRESSABLE_SSD_PAGES];
 	for (unsigned int i=0;i<ADDRESSABLE_SSD_PAGES;i++)
@@ -195,6 +196,7 @@ FtlImpl_Page::FtlImpl_Page(Controller &controller, Ssd &parent):FtlParent(contro
 	bg_events_time = -1;
 	next_event_time = -1;
 	target_selection_delay = 0;
+	hot_page_count_per_plane = 2 * (CACHE_SIZE/MAX_GC_PLANES);
 }
 
 unsigned int FtlImpl_Page::get_next_block_lba(unsigned int lba)
@@ -585,11 +587,13 @@ FtlImpl_Page::~FtlImpl_Page(void)
 			delete (*i);
 		}
 		ftl_queues[l].clear();
+		//hot_pages[l].clear();
 	}
 	bg_cleaning_blocks.clear();
 	required_bg_events.clear();
 	background_events.clear();
 	ftl_queues.clear();
+	//hot_pages.clear();
 	free(ftl_queue_has_bg_event);
 	free(ftl_queue_last_bg_event_index);
 	delete[] logical_page_list;
@@ -615,6 +619,44 @@ enum status FtlImpl_Page::read(Event &event, bool &op_complete, double &end_time
 
 	Address read_address = logical_page_list[logical_page_num].physical_address;
 	event.set_address(read_address);
+	unsigned int read_block = read_address.block;
+	unsigned int read_page = read_address.page;
+	unsigned int page_num = read_block*BLOCK_SIZE + read_page;
+	unsigned int plane_num = read_address.package*PACKAGE_SIZE*DIE_SIZE + read_address.die*DIE_SIZE + read_address.plane;
+	//std::unordered_map<unsigned int, std::pair<unsigned int, double>>::iterator hot_page_iter = hot_pages[plane_num].find(page_num);
+	////std::multimap<unsigned int, unsigned int, std::greater<unsigned int>>::iterator hot_page_iter;
+	////for(hot_page_iter = hot_pages[plane_num].begin();hot_page_iter != hot_pages[plane_num].end(); hot_page_iter++)
+	////{
+	////	if(hot_page_iter->second == page_num)
+	////		break;
+	////}
+	//if(hot_page_iter != hot_pages[plane_num].end())
+	//{
+	//	unsigned int freq = hot_page_iter->second.first;
+	//	hot_pages[plane_num].erase(hot_page_iter);
+	//	hot_pages[plane_num].insert(std::pair<unsigned int, std::pair<unsigned int, double>>(page_num, std::pair<unsigned int, double>(freq+1, event.get_start_time())));
+	//}	
+	//else
+	//{
+	//	if(hot_pages[plane_num].size() >= hot_page_count_per_plane)
+	//	{
+	//		std::unordered_map<unsigned int, std::pair<unsigned int, double>>::iterator min_iter;
+	//		unsigned int min_freq = UINT_MAX;
+	//		double most_recent = 0;
+	//		for(hot_page_iter = hot_pages[plane_num].begin();hot_page_iter != hot_pages[plane_num].end(); hot_page_iter++)
+	//		{
+	//			if(hot_page_iter->second.first < min_freq || (hot_page_iter->second.first == min_freq && hot_page_iter->second.second > most_recent))
+	//			{
+	//				min_iter = hot_page_iter;
+	//				min_freq = hot_page_iter->second.first;
+	//				most_recent = hot_page_iter->second.second;
+	//			}
+	//		}
+	//		hot_pages[plane_num].erase(hot_page_iter);
+	//	}
+	//	unsigned int page_num = read_block*BLOCK_SIZE + read_page;
+	//	hot_pages[plane_num].insert(std::pair<unsigned int, std::pair<unsigned int, double>>(page_num, std::pair<unsigned int, double>(1, event.get_start_time())));
+	//}
 	if(ssd.cache.present_in_cache(event))
 	{
 		end_time = read_(event);
@@ -622,7 +664,6 @@ enum status FtlImpl_Page::read(Event &event, bool &op_complete, double &end_time
 		return SUCCESS;
 	}
 
-	unsigned int plane_num = read_address.package*PACKAGE_SIZE*DIE_SIZE + read_address.die*DIE_SIZE + read_address.plane;
 	struct ftl_event fg_read;
 	fg_read.type = READ;
 	fg_read.logical_address = event.get_logical_address();
@@ -944,8 +985,10 @@ enum status FtlImpl_Page::garbage_collect(double time)
 			ret_status = garbage_collect_cached(time);
 			break;
 		case(2):
-			ret_status = garbage_collect_hot_cached(time);
+			ret_status = garbage_collect_hot_small_cache(time);
 			break;
+		case(3):
+			ret_status = garbage_collect_hot_large_cache(time);
 		default:
 			ret_status = garbage_collect_default(time);
 			break;
@@ -1361,7 +1404,7 @@ enum status FtlImpl_Page::garbage_collect_cached(double time)
 	return SUCCESS;
 }
 
-enum status FtlImpl_Page::garbage_collect_hot_cached(double time)
+enum status FtlImpl_Page::garbage_collect_hot_small_cache(double time)
 {
 	std::list<struct ssd_block>::iterator iter;
 	float max_benefit = 0, cur_benefit;
@@ -1448,6 +1491,7 @@ enum status FtlImpl_Page::garbage_collect_hot_cached(double time)
 	//printf("GC target plane is %d\n", target_plane);
 
 	bool first_event = true;
+	/*
 	for(iter = allocated_block_list[target_plane].begin();iter!=allocated_block_list[target_plane].end();iter++)
 	{
 		Address cur_page_address = iter->physical_address;
@@ -1481,6 +1525,7 @@ enum status FtlImpl_Page::garbage_collect_hot_cached(double time)
 			}
 		}
 	}
+	*/
 
 
 	std::vector<unsigned int> erase_block_list;
@@ -1499,6 +1544,7 @@ enum status FtlImpl_Page::garbage_collect_hot_cached(double time)
 	for(iter = filled_block_list[target_plane].begin();iter!=filled_block_list[target_plane].end();iter++)
 	{
 		bool schedule_writes = false;
+		
 		if(std::find(erase_block_list.begin(), erase_block_list.end(), std::distance(filled_block_list[target_plane].begin(), iter)) != erase_block_list.end()	
 			)  
 		{
@@ -1512,6 +1558,265 @@ enum status FtlImpl_Page::garbage_collect_hot_cached(double time)
 		{
 			cur_page_address.page = i;
 			if(cur_page_address == logical_page_list[(iter->page_mapping)[i]].physical_address)
+			{
+				struct ftl_event bg_read;
+				bg_read.type = READ;
+				bg_read.physical_address = cur_page_address;
+				bg_read.logical_address = (iter->page_mapping)[i];
+				bg_read.start_time = time;
+				bg_read.end_time = bg_read.start_time;
+				bg_read.process = BACKGROUND;
+				bg_read.op_complete_pointer = NULL;
+				bg_read.end_time_pointer = NULL;
+				if(first_event)
+				{
+					bg_read.update_plane_priority = true;
+					bg_read.plane_priority = true;
+					first_event = false;
+				}
+				else
+				{
+					bg_read.update_plane_priority = false;
+					bg_read.plane_priority = true;
+				}
+				background_events[target_plane].push_back(bg_read);
+
+				if(schedule_writes)
+				{
+					struct ftl_event bg_write;
+					bg_write.type = WRITE;
+					bg_write.physical_address = cur_page_address;
+					bg_write.logical_address = (iter->page_mapping)[i];
+					bg_write.start_time = time;
+					bg_write.end_time = bg_write.start_time;
+					bg_write.process = BACKGROUND;
+					bg_write.op_complete_pointer = NULL;
+					bg_write.end_time_pointer = NULL;
+					bg_write.update_plane_priority = false;
+					bg_write.plane_priority = true;
+					//background_events[target_plane].push_back(bg_write);
+					write_events.push_back(bg_write);
+				}
+			}
+		}
+		if(schedule_writes)
+		{
+			required_bg_events_location[cur_block_to_gc_num].rw_end_index = background_events[target_plane].size();
+			cur_block_to_gc_num++;
+		}
+	}
+	assert(erase_block_list.size() == 2*num_blocks_to_gc);
+	std::vector<unsigned int>::iterator remove_till = erase_block_list.begin();
+	std::advance(remove_till, num_blocks_to_gc);
+	erase_block_list.erase(erase_block_list.begin(), remove_till);
+	cur_block_to_gc_num = 0;
+	for(;cur_block_to_gc_num < num_blocks_to_gc;cur_block_to_gc_num++)
+	{
+		unsigned int num_pages = required_bg_events_location[cur_block_to_gc_num].rw_end_index;
+		std::list<struct ftl_event>::iterator last_write_pointer = write_events.begin();
+		std::advance(last_write_pointer, num_pages);
+		background_events[target_plane].insert(background_events[target_plane].end(), write_events.begin(), last_write_pointer);
+		write_events.erase(write_events.begin(), last_write_pointer);
+		unsigned int offset = erase_block_list[cur_block_to_gc_num];
+		std::list<struct ssd_block>::iterator erase_block_iterator = filled_block_list[target_plane].begin();
+		std::advance(erase_block_iterator, offset);
+		struct ssd_block erase_block = *erase_block_iterator;
+		required_bg_events_location[cur_block_to_gc_num].erase_index = background_events[target_plane].size();
+		struct ftl_event bg_erase;
+		bg_erase.type = ERASE;
+		bg_erase.physical_address = erase_block.physical_address;
+		bg_erase.logical_address = translate_pba_lba(erase_block.physical_address);
+		bg_erase.start_time = time;
+		bg_erase.end_time = 0;
+		bg_erase.process = BACKGROUND;
+		bg_erase.op_complete_pointer = NULL;
+		bg_erase.end_time_pointer = NULL;
+		if(cur_block_to_gc_num == num_blocks_to_gc - 1)
+		{
+			bg_erase.update_plane_priority = true;
+			bg_erase.plane_priority = false;
+		}
+		else
+		{
+			bg_erase.update_plane_priority = false;
+			bg_erase.plane_priority = true;
+		}
+		background_events[target_plane].push_back(bg_erase);
+		bg_cleaning_blocks[target_plane].push_back(erase_block);
+		//printf("GC'ed ");
+		//erase_block.physical_address.print();
+		//printf("\n");
+
+	}
+	std::sort(erase_block_list.begin(), erase_block_list.end());
+	cur_block_to_gc_num = num_blocks_to_gc;
+	for(;cur_block_to_gc_num-- > 0;)
+	{
+		unsigned int offset = erase_block_list[cur_block_to_gc_num];
+		std::list<struct ssd_block>::iterator erase_block_iterator = filled_block_list[target_plane].begin();
+		std::advance(erase_block_iterator, offset);
+		filled_block_list[target_plane].erase(erase_block_iterator);
+	}
+	cur_block_to_gc_num = 0;
+	for(;cur_block_to_gc_num < num_blocks_to_gc;cur_block_to_gc_num++)
+	{
+		required_bg_events[target_plane].push_back(required_bg_events_location[cur_block_to_gc_num]);
+	}
+	return SUCCESS;
+}
+enum status FtlImpl_Page::garbage_collect_hot_large_cache(double time)
+{
+	std::list<struct ssd_block>::iterator iter;
+	float max_benefit = 0, cur_benefit;
+	unsigned int max_benefit_plane = SSD_SIZE*PACKAGE_SIZE*DIE_SIZE;
+	bool cleaning_possible = false;
+
+	for(unsigned int p_num = 0;p_num < SSD_SIZE*PACKAGE_SIZE*DIE_SIZE;p_num++)
+	{
+		for(iter=allocated_block_list[p_num].begin();iter!=allocated_block_list[p_num].end();)
+		{
+			if(iter->page_to_write == BLOCK_SIZE)
+			{
+				filled_block_list[p_num].push_back(*iter);
+				iter = allocated_block_list[p_num].erase(iter);
+				continue;
+			}
+			else
+			{
+				iter++;
+			}
+		}
+	}
+	cleaning_possible = false;
+
+	double plane_valid_page_count[SSD_SIZE*PACKAGE_SIZE*DIE_SIZE];
+	double plane_average_age[SSD_SIZE*PACKAGE_SIZE*DIE_SIZE];
+	unsigned int num_possible_blocks[SSD_SIZE*PACKAGE_SIZE*DIE_SIZE];
+
+	std::vector<std::pair<unsigned int, float>> possible_erase_blocks[SSD_SIZE*PACKAGE_SIZE*DIE_SIZE];
+
+	for(unsigned int p_num = 0;p_num < SSD_SIZE*PACKAGE_SIZE*DIE_SIZE;p_num++)
+	{
+		plane_valid_page_count[p_num] = 0;
+		plane_average_age[p_num] = 0;
+		num_possible_blocks[p_num] = 0;
+	}
+
+	for(unsigned int p_num = 0;p_num < SSD_SIZE*PACKAGE_SIZE*DIE_SIZE;p_num++)
+	{
+		for(iter=filled_block_list[p_num].begin();iter!=filled_block_list[p_num].end();iter++)
+		{
+			Address cur_address = iter->physical_address;
+			plane_valid_page_count[p_num] += iter->valid_page_count;
+			double cur_block_age = get_average_age(*iter);
+			plane_average_age[p_num] += cur_block_age;
+
+			float utilization = (float)iter->valid_page_count/(float)BLOCK_SIZE;
+			double age = cur_block_age;
+			cur_benefit = (1.0 - utilization)*(float)age / (1.0 + utilization);
+			if(iter->valid_page_count == BLOCK_SIZE || bg_cleaning_blocks[p_num].size() > 0)
+			{
+				cur_benefit = 0;
+			}
+			else
+			{
+				num_possible_blocks[p_num]++;
+			}
+			possible_erase_blocks[p_num].push_back(std::pair<unsigned int, float>(std::distance(filled_block_list[p_num].begin(), iter), cur_benefit));
+		}
+	}
+
+	for(unsigned int p_num = 0;p_num < SSD_SIZE*PACKAGE_SIZE*DIE_SIZE;p_num++)
+	{
+		if(num_possible_blocks[p_num] < MIN_BLOCKS_PER_GC)
+			continue;
+		plane_valid_page_count[p_num] = (double)plane_valid_page_count[p_num]/((double)(PLANE_SIZE * BLOCK_SIZE));
+		plane_average_age[p_num] = (double)plane_average_age[p_num]/(double)PLANE_SIZE;
+		if(plane_valid_page_count[p_num] == 1)
+			continue;
+		cur_benefit = (1.0 - plane_valid_page_count[p_num]) * plane_average_age[p_num] /(1.0 + plane_valid_page_count[p_num]);
+		if(cur_benefit > 0 && (max_benefit == 0 || cur_benefit > max_benefit))
+		{
+			max_benefit = cur_benefit;
+			max_benefit_plane = p_num; 
+			cleaning_possible = true;
+		}    
+	}
+	if(!cleaning_possible)
+	{
+		//printf("cleaning is not possible\n");
+		return FAILURE;
+	} 
+	unsigned int target_plane = max_benefit_plane;
+	//printf("GC target plane is %d\n", target_plane);
+
+	bool first_event = true;
+	/*
+	for(iter = allocated_block_list[target_plane].begin();iter!=allocated_block_list[target_plane].end();iter++)
+	{
+		Address cur_page_address = iter->physical_address;
+		cur_page_address.valid = PAGE;
+		for(unsigned int i=0;i<BLOCK_SIZE;i++)
+		{
+			cur_page_address.page = i;
+			if(cur_page_address == logical_page_list[(iter->page_mapping)[i]].physical_address)
+			{
+				struct ftl_event bg_read;
+				bg_read.type = READ;
+				bg_read.physical_address = cur_page_address;
+				bg_read.logical_address = (iter->page_mapping)[i];
+				bg_read.start_time = time;
+				bg_read.end_time = 0;
+				bg_read.process = BACKGROUND;
+				bg_read.op_complete_pointer = NULL;
+				bg_read.end_time_pointer = NULL;
+				if(first_event)
+				{
+					bg_read.update_plane_priority = true;
+					bg_read.plane_priority = true;
+					first_event = false;
+				}
+				else
+				{
+					bg_read.update_plane_priority = false;
+					bg_read.plane_priority = true;
+				}
+				background_events[target_plane].push_back(bg_read);
+			}
+		}
+	}
+	*/
+
+
+	std::vector<unsigned int> erase_block_list;
+	std::sort(possible_erase_blocks[target_plane].begin(), possible_erase_blocks[target_plane].end(), compare_possible_erase_blocks);
+	
+	unsigned int num_blocks_to_gc = possible_erase_blocks[target_plane].size() < MAX_BLOCKS_PER_GC ? possible_erase_blocks[target_plane].size() : MAX_BLOCKS_PER_GC;
+	
+	for(unsigned int top_candidate = 0;top_candidate < num_blocks_to_gc;top_candidate++)
+		erase_block_list.push_back(possible_erase_blocks[target_plane][top_candidate].first);
+
+	struct required_bg_events_pointer required_bg_events_location[num_blocks_to_gc];
+	unsigned int cur_block_to_gc_num = 0;
+
+	std::list<struct ftl_event> write_events;
+
+	for(iter = filled_block_list[target_plane].begin();iter!=filled_block_list[target_plane].end();iter++)
+	{
+		bool schedule_writes = false;
+		if(std::find(erase_block_list.begin(), erase_block_list.end(), std::distance(filled_block_list[target_plane].begin(), iter)) != erase_block_list.end())  
+		{
+			schedule_writes = true;
+			required_bg_events_location[cur_block_to_gc_num].rw_start_index = background_events[target_plane].size();
+			erase_block_list.push_back(std::distance(filled_block_list[target_plane].begin(), iter));
+		}
+		Address cur_page_address = iter->physical_address;
+		cur_page_address.valid = PAGE;
+		for(unsigned int i=0;i<BLOCK_SIZE;i++)
+		{
+			cur_page_address.page = i;
+			unsigned int page_num = cur_page_address.block * BLOCK_SIZE + cur_page_address.page;
+			if(cur_page_address == logical_page_list[(iter->page_mapping)[i]].physical_address)// && (schedule_writes || hot_pages[target_plane].find(page_num) != hot_pages[target_plane].end()))
 			{
 				struct ftl_event bg_read;
 				bg_read.type = READ;

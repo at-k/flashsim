@@ -1000,6 +1000,7 @@ private:
 	std::vector<std::list<struct ssd_block>> free_block_list;
 	std::vector<std::list<struct ssd_block>> allocated_block_list;
 	std::vector<std::list<struct ssd_block>> filled_block_list;
+	//std::vector<std::unordered_map<unsigned int, std::pair<unsigned int, double>>> hot_pages;
 
 	std::list<std::pair<std::list<struct ssd_block>::iterator, double>> target_blocks;
 	std::list<std::pair<unsigned int, double>> target_planes;
@@ -1009,6 +1010,7 @@ private:
 	struct logical_page *logical_page_list;
 	Address log_write_address;
 	unsigned int low_watermark;
+	unsigned int hot_page_count_per_plane;
 
 	unsigned int *ftl_queue_last_bg_event_index;
 	bool *ftl_queue_has_bg_event;
@@ -1032,7 +1034,8 @@ private:
 	enum status garbage_collect(double time);
 	enum status garbage_collect_default(double time);
 	enum status garbage_collect_cached(double time);
-	enum status garbage_collect_hot_cached(double time);
+	enum status garbage_collect_hot_small_cache(double time);
+	enum status garbage_collect_hot_large_cache(double time);
 	double process_background_tasks(Event &event);
 	double read_(Event &event);
 	double write_(Event &event);
