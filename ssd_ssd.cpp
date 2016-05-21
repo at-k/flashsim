@@ -121,7 +121,10 @@ Ssd::~Ssd(void)
 	}
 	free(data);
 	ulong pageSize = ((ulong)(SSD_SIZE * PACKAGE_SIZE * DIE_SIZE * PLANE_SIZE * BLOCK_SIZE)) * (ulong)PAGE_SIZE;
-	munmap(page_data, pageSize);
+	if(PAGE_ENABLE_DATA)
+	{
+		munmap(page_data, pageSize);
+	}
 	return;
 }
 
