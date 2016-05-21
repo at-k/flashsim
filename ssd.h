@@ -1000,7 +1000,7 @@ private:
 	std::vector<std::list<struct ssd_block>> free_block_list;
 	std::vector<std::list<struct ssd_block>> allocated_block_list;
 	std::vector<std::list<struct ssd_block>> filled_block_list;
-	//std::vector<std::unordered_map<unsigned int, std::pair<unsigned int, double>>> hot_pages;
+	std::vector<std::unordered_map<unsigned int, std::pair<unsigned int, double>>> hot_pages;
 
 	std::list<std::pair<std::list<struct ssd_block>::iterator, double>> target_blocks;
 	std::list<std::pair<unsigned int, double>> target_planes;
