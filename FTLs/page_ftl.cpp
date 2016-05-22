@@ -504,9 +504,9 @@ bool FtlImpl_Page::allocate_new_block(Address requested_address)
 		log_write_address.valid = PAGE;
 		ret_val = true;
 	}
-	printf("Allocated a new block ");
-	log_write_address.print();
-	printf(" and now free blocks are %d\n", free_blocks - 1);
+	//printf("Allocated a new block ");
+	//log_write_address.print();
+	//printf(" and now free blocks are %d\n", free_blocks - 1);
 	return ret_val;
 }
 
@@ -796,7 +796,7 @@ void FtlImpl_Page::process_waiting_events(double time)
 			}
 			break; 
 		} 
-		printf("processing write %d with free blocks %d\n", process_write_num, pre_free_blocks);
+		//printf("processing write %d with free blocks %d\n", process_write_num, pre_free_blocks);
 		process_write_num++;
 		Address log_write_block_address = log_write_address;
 		log_write_block_address.page = 0;
@@ -1140,9 +1140,9 @@ enum status FtlImpl_Page::garbage_collect_default(double time)
 	bg_cleaning_blocks[plane_num].push_back(block_to_clean);
 	assert(required_bg_events_location.rw_end_index == required_bg_events_location.erase_index);
 	required_bg_events[plane_num].push_back(required_bg_events_location);
-	printf("GC ");
-	block_to_clean.physical_address.print();
-	printf("\n");
+	//printf("GC ");
+	//block_to_clean.physical_address.print();
+	//printf("\n");
 	return SUCCESS;
 }
 
@@ -1802,7 +1802,6 @@ enum status FtlImpl_Page::garbage_collect_hot_large_cache(double time)
 
 	std::list<struct ftl_event> write_events;
 
-	unsigned int temp_counter = 0;
 	for(iter = filled_block_list[target_plane].begin();iter!=filled_block_list[target_plane].end();iter++)
 	{
 		bool schedule_writes = false;
@@ -1829,7 +1828,6 @@ enum status FtlImpl_Page::garbage_collect_hot_large_cache(double time)
 				bg_read.process = BACKGROUND;
 				bg_read.op_complete_pointer = NULL;
 				bg_read.end_time_pointer = NULL;
-				temp_counter++;
 				if(first_event)
 				{
 					bg_read.update_plane_priority = true;
@@ -1858,7 +1856,6 @@ enum status FtlImpl_Page::garbage_collect_hot_large_cache(double time)
 					bg_write.plane_priority = true;
 					//background_events[target_plane].push_back(bg_write);
 					write_events.push_back(bg_write);
-					temp_counter--;
 				}
 			}
 		}
@@ -1868,7 +1865,6 @@ enum status FtlImpl_Page::garbage_collect_hot_large_cache(double time)
 			cur_block_to_gc_num++;
 		}
 	}
-	printf("GCHLC read %d extra pages for plane %d\n", temp_counter, target_plane);
 	assert(erase_block_list.size() == 2*num_blocks_to_gc);
 	std::vector<unsigned int>::iterator remove_till = erase_block_list.begin();
 	std::advance(remove_till, num_blocks_to_gc);
@@ -2024,9 +2020,9 @@ double FtlImpl_Page::process_background_tasks(Event &event)
 				bool is_erase = false;
 				if(first_event.type == READ)
 				{
-					printf("BG READ ");
-					candidate_address.print();
-					printf("\n");
+					//printf("BG READ ");
+					//candidate_address.print();
+					//printf("\n");
 					first_event.end_time = read_(e);
 					background_events[plane_num].erase(background_events[plane_num].begin());
 					move_required_pointers(plane_num, 0, 1);
@@ -2039,11 +2035,11 @@ double FtlImpl_Page::process_background_tasks(Event &event)
 					{
 						free_blocks += free_block_list[p_num].size();
 					}
-					printf("BG WRITE ");
-					first_event.physical_address.print();
-					printf(" ");
-					candidate_address.print();
-					printf("\n");
+					//printf("BG WRITE ");
+					//first_event.physical_address.print();
+					//printf(" ");
+					//candidate_address.print();
+					//printf("\n");
 					mark_reserved(log_write_address, true);
 					first_event.end_time = write_(e);
 
@@ -2071,8 +2067,8 @@ double FtlImpl_Page::process_background_tasks(Event &event)
 				}
 				else if(first_event.type == ERASE)
 				{
-					printf("BG ERASE ");
-					candidate_address.print();
+					//printf("BG ERASE ");
+					//candidate_address.print();
 					controller.issue(e);
 					first_event.end_time = e.get_total_time();
 					if(first_event.update_plane_priority && !first_event.plane_priority)
@@ -2088,7 +2084,7 @@ double FtlImpl_Page::process_background_tasks(Event &event)
 					{
 						free_blocks += free_block_list[p_num].size();
 					}
-					printf(" and now free blocks are %d\n", free_blocks);
+					//printf(" and now free blocks are %d\n", free_blocks);
 					if(free_blocks > clean_threshold)
 					{
 						gc_required = false;
