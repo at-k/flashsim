@@ -38,6 +38,7 @@ using namespace ssd;
 
 enum op_type{OP_READ, OP_WRITE};
 
+bool trace_enable = false;
 
 int main(int argc, char **argv)
 {
@@ -50,8 +51,8 @@ int main(int argc, char **argv)
 	unsigned int q_depth;
 	bool write_data;
 	//unsigned int req_per_thread = 1000;
-	
-	unsigned int total_read_count = 1000, cur_read_count = 0;
+
+	unsigned int total_read_count = 3000000, cur_read_count = 0;
 
 
 	load_config();
@@ -61,7 +62,6 @@ int main(int argc, char **argv)
 	Ssd *ssd = new Ssd();
 	//srand(time(NULL));
 	srand(10101);
-
 	unsigned int write = atoi(argv[1]);
 	unsigned int util_percent = atoi(argv[2]);
 	q_depth = atoi(argv[3]);
@@ -73,7 +73,6 @@ int main(int argc, char **argv)
 
 	printf("addressable blocks %d\n", NUMBER_OF_ADDRESSABLE_BLOCKS);
 	unsigned int lastLBA = NUMBER_OF_ADDRESSABLE_BLOCKS * BLOCK_SIZE;
-
 
 	strcat(read_file_name, "closed_read_");
 	strcat(read_file_name, ftl_implementation);
@@ -157,7 +156,7 @@ int main(int argc, char **argv)
 	bool op_complete[q_depth];
 	double op_start_time[q_depth];
 	double op_complete_time[q_depth];
-	enum op_type op_rw_type[q_depth]; 
+	enum op_type op_rw_type[q_depth];
 	unsigned int op_addresses[q_depth];
 	for (unsigned int i=0;i<q_depth;i++)
 	{
@@ -166,7 +165,7 @@ int main(int argc, char **argv)
 		op_start_time[i] = initial_delay;
 		op_addresses[i] = 0;
 		op_rw_type[i] = OP_READ;
-	}	
+	}
 	next_noop_time = initial_delay;
 	unsigned int write_count = 0;
 	bool loop = true;
@@ -186,10 +185,10 @@ int main(int argc, char **argv)
 			op_addresses[i] = location;
 			op_rw_type[i] = OP_WRITE;
 			//addresses.insert(location);
-		}	
+		}
 		else
 		{
-			
+
 			location = rand()%lastLBA;
 			//while(addresses.find(location) == addresses.end())
 			//{
@@ -205,7 +204,9 @@ int main(int argc, char **argv)
 			op_rw_type[i] = OP_READ;
 		}
 	}
-	
+
+    trace_enable = true;
+    std::cout << "trace enable" << std::endl;
 	prev_noop_time = initial_delay;
 	while(loop)
 	{
@@ -253,20 +254,20 @@ int main(int argc, char **argv)
 				prev_noop_time = next_noop_time;
 			loop_c++;
 		}
-				
+
 		if(op_rw_type[earliest_event_index] == OP_READ)
 		{
-			fprintf(read_file, "%.5lf\t%.5lf\t%.5lf\t%d\n", op_start_time[earliest_event_index], 
-					op_complete_time[earliest_event_index] - op_start_time[earliest_event_index], 
+			fprintf(read_file, "%.5lf\t%.5lf\t%.5lf\t%d\n", op_start_time[earliest_event_index],
+					op_complete_time[earliest_event_index] - op_start_time[earliest_event_index],
 					op_complete_time[earliest_event_index], op_addresses[earliest_event_index]);
 			cur_read_count++;
-			//printf("[Application] latency for %d was %f\n", op_addresses[earliest_event_index], 
+			//printf("[Application] latency for %d was %f\n", op_addresses[earliest_event_index],
 			//		op_complete_time[earliest_event_index] - op_start_time[earliest_event_index]);
 		}
 		else
 		{
-			fprintf(write_file, "%.5lf\t%.5lf\t%.5lf\t%d\n", op_start_time[earliest_event_index], 
-					op_complete_time[earliest_event_index] - op_start_time[earliest_event_index], 
+			fprintf(write_file, "%.5lf\t%.5lf\t%.5lf\t%d\n", op_start_time[earliest_event_index],
+					op_complete_time[earliest_event_index] - op_start_time[earliest_event_index],
 					op_complete_time[earliest_event_index], op_addresses[earliest_event_index]);
 			write_count++;
 			addresses.insert(op_addresses[earliest_event_index]);
@@ -287,13 +288,13 @@ int main(int argc, char **argv)
 		{
 			location = rand()%lastLBA;
 			op_addresses[earliest_event_index] = location;
-			//printf("[Application] sending a write for %d at time %f with op complete %d at address %p\n", op_addresses[earliest_event_index], 
+			//printf("[Application] sending a write for %d at time %f with op complete %d at address %p\n", op_addresses[earliest_event_index],
 			//		op_start_time[earliest_event_index], op_complete[earliest_event_index], &op_complete[earliest_event_index]);
-			result = ssd->event_arrive(WRITE, location, 1, (double) op_start_time[earliest_event_index], 
+			result = ssd->event_arrive(WRITE, location, 1, (double) op_start_time[earliest_event_index],
 					op_complete[earliest_event_index], op_complete_time[earliest_event_index]);
 			op_rw_type[earliest_event_index] = OP_WRITE;
 			//addresses.insert(location);
-		}	
+		}
 		else
 		{
 			location = rand()%lastLBA;
@@ -302,9 +303,9 @@ int main(int argc, char **argv)
 			//	location = rand()%lastLBA;
 			//}
 			op_addresses[earliest_event_index] = location;
-			//printf("[Application] sending a read for %d at time %f\n", op_addresses[earliest_event_index], 
+			//printf("[Application] sending a read for %d at time %f\n", op_addresses[earliest_event_index],
 			//		op_start_time[earliest_event_index]);
-			result = ssd->event_arrive(READ, location, 1, (double) op_start_time[earliest_event_index], 
+			result = ssd->event_arrive(READ, location, 1, (double) op_start_time[earliest_event_index],
 					op_complete[earliest_event_index], op_complete_time[earliest_event_index]);
 			op_rw_type[earliest_event_index] = OP_READ;
 		}
@@ -313,13 +314,13 @@ int main(int argc, char **argv)
 			fprintf(read_file, "==========\nCould not operate\n");
 			goto exit;
 		}
-		
+
 		if(cur_read_count >= total_read_count)
 		{
 			loop = false;
 			break;
 		}
-		
+
 	}
 	while(prev_noop_time < std::numeric_limits<double>::max())
 	{

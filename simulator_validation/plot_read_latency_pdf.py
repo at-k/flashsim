@@ -1,6 +1,8 @@
 import os
 import sys
 import numpy
+import matplotlib as mpl
+mpl.use('Agg')
 import matplotlib.pyplot as plt
 
 def main():
@@ -13,7 +15,7 @@ def main():
         try:
             cur_latency = float(line.strip())
             #This is done so as to combine all latencies higher than 2000 into a single slot
-            #Otherwise, each latency value has a very small frequency and inferring the total 
+            #Otherwise, each latency value has a very small frequency and inferring the total
             #frequency of latencies higher than 2000 from the plot becomes infeasible
             if cur_latency > 2000:
                     cur_latency = 2001

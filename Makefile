@@ -1,11 +1,12 @@
-CXX=g++ -O2 -std=c++11 
+CXX=g++ -O2 -std=c++11 -fPIC -finstrument-functions -export-dynamic
+#CXX=g++ -O2 -std=c++11
 CXXFLAGS=-Wall -c
-DEBUGFLAGS=-g 
+DEBUGFLAGS=-g
 LDFLAGS=-pg
 HEADERS=ssd.h
 SOURCES_SSDLIB = $(HEADERS) \
 				 $(filter-out ssd_ftl.cpp, $(wildcard ssd_*.cpp))  \
-                 $(wildcard FTLs/*.cpp)                            
+                 $(wildcard FTLs/*.cpp)
 OBJECTS_SSDLIB=$(patsubst %.cpp,%.o,$(SOURCES_SSDLIB))
 SOURCES_RUNS = $(wildcard run_*.cpp)
 PROGRAMS = $(patsubst run_%.cpp,%,$(SOURCES_RUNS))
